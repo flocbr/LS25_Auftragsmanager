@@ -16,7 +16,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const API_URL = "https://script.google.com/macros/s/AKfycbyHAiTIGMSxk3vgCdFD6K25hp70JaounYzURZzc2lBZab-pPuVBoucq2_5rkWR2ecvQ/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbyfPFzCDjqgYatIhMBxeKZMeNtIkaRbaQjbeXAaFgdgCJLLy3ZtQ7KmCNdoTRdlqhNX/exec";
 
     const VEHICLE_CATEGORIES = [
       'Trecker',
@@ -68,6 +68,7 @@
       
       const [loading, setLoading] = useState(false);
       const [lastSync, setLastSync] = useState(null);
+      const [resetTimestamp, setResetTimestamp] = useState(() => Number(localStorage.getItem('ls25_reset_ts')) || 0);
 
       // Modals
       const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
@@ -138,9 +139,20 @@
 
       const handleResetFinance = () => {
         if (window.confirm("Möchtest du deine Finanzstatistik wirklich auf Null zurücksetzen?")) {
-          localStorage.setItem('ls25_reset_ts', Date.now());
+          const now = Date.now();
+          localStorage.setItem('ls25_reset_ts', now);
+          setResetTimestamp(now);
           fetchData();
         }
+      };
+
+      const isAfterReset = (id) => {
+        if (!resetTimestamp) return true;
+        if (!id) return true;
+        const parts = id.toString().split('-');
+        const ts = Number(parts[parts.length - 1]);
+        if (isNaN(ts)) return true;
+        return ts >= resetTimestamp;
       };
 
       // Filtered Lists
@@ -158,18 +170,18 @@
       const goodPendingCount = waren.filter(g => g.ersteller === userName && Number(g.gewünschteMenge) > 0).length;
       const orderPendingCount = myAuftraege.filter(c => c.status === 'erledigt').length;
 
-      // FINANZ-LOGIK
-      const paidAuftraegeEarnings = auftraege.filter(c => c.auftragnehmer === userName && (c.status || '').toString().trim().toLowerCase() === 'bezahlt');
-      const paidAuftraegeExpenses = auftraege.filter(c => c.ersteller === userName && (c.status || '').toString().trim().toLowerCase() === 'bezahlt');
+      // FINANZ-LOGIK (mit Reset-Filter)
+      const paidAuftraegeEarnings = auftraege.filter(c => c.auftragnehmer === userName && (c.status || '').toString().trim().toLowerCase() === 'bezahlt' && isAfterReset(c.id));
+      const paidAuftraegeExpenses = auftraege.filter(c => c.ersteller === userName && (c.status || '').toString().trim().toLowerCase() === 'bezahlt' && isAfterReset(c.id));
 
-      const soldVehiclesEarnings = fahrzeuge.filter(v => v.ersteller === userName && (v.status || '').toString().trim().toLowerCase() === 'verkauft');
-      const boughtVehiclesExpenses = fahrzeuge.filter(v => v.kaufer === userName && (v.status || '').toString().trim().toLowerCase() === 'verkauft');
+      const soldVehiclesEarnings = fahrzeuge.filter(v => v.ersteller === userName && (v.status || '').toString().trim().toLowerCase() === 'verkauft' && isAfterReset(v.id));
+      const boughtVehiclesExpenses = fahrzeuge.filter(v => v.kaufer === userName && (v.status || '').toString().trim().toLowerCase() === 'verkauft' && isAfterReset(v.id));
 
-      const soldGoodsEarnings = waren.filter(g => g.ersteller === userName && ((g.status || '').toString().trim().toLowerCase() === 'verkauft' || Number(g.menge) === 0));
-      const boughtGoodsExpenses = waren.filter(g => g.kaufer === userName && ((g.status || '').toString().trim().toLowerCase() === 'verkauft' || Number(g.menge) === 0));
+      const soldGoodsEarnings = waren.filter(g => g.ersteller === userName && (g.status || '').toString().trim().toLowerCase() === 'verkauft' && isAfterReset(g.id));
+      const boughtGoodsExpenses = waren.filter(g => g.kaufer === userName && (g.status || '').toString().trim().toLowerCase() === 'verkauft' && isAfterReset(g.id));
 
       const calculateGoodTotalPrice = (g) => {
-        const qty = Number(g.gewünschteMenge) || Number(g.menge) || 0;
+        const qty = Number(g.menge) || 0;
         const unitPrice = parseFloat(g.preis) || 0;
         if (g.einheit && g.einheit.includes('Liter')) {
           return Math.round((qty / 1000) * unitPrice);
@@ -454,9 +466,11 @@
                     {activeWaren.map((g) => {
                       const requestedQty = Number(g.gewünschteMenge) || 0;
                       const hasRequest = requestedQty > 0;
-                      const calculatedPrice = calculateGoodTotalPrice(g);
                       const remainingAfterSale = Number(g.menge) - requestedQty;
                       const isLiter = g.einheit && g.einheit.includes('Liter');
+
+                      const tempSoldItem = { ...g, menge: requestedQty };
+                      const calculatedPrice = calculateGoodTotalPrice(tempSoldItem);
 
                       return (
                         <div key={g.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
@@ -486,13 +500,17 @@
                             <div>
                               {hasRequest ? (
                                 <button 
-                                  onClick={() => sendAction('ware', 'updateStatus', { 
-                                    id: g.id, 
-                                    status: remainingAfterSale <= 0 ? 'Verkauft' : 'verfügbar', 
-                                    menge: remainingAfterSale, 
-                                    gewünschteMenge: 0,
-                                    kaufer: g.kaufer
-                                  })}
+                                  onClick={() => {
+                                    const isFullSale = remainingAfterSale <= 0;
+                                    sendAction('ware', 'updateStatus', { 
+                                      id: g.id, 
+                                      status: isFullSale ? 'Verkauft' : 'verfügbar', 
+                                      menge: remainingAfterSale, 
+                                      gewünschteMenge: 0,
+                                      kaufer: g.kaufer,
+                                      soldQty: isFullSale ? 0 : requestedQty
+                                    });
+                                  }}
                                   className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2.5 rounded-xl transition animate-pulse"
                                 >
                                   Verkauf an {g.kaufer} ({requestedQty} für {calculatedPrice} €) akzeptieren
@@ -594,13 +612,13 @@
                     ))}
                     {soldGoodsEarnings.map(g => (
                       <div key={g.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
-                        <span>Einnahme: Ware "{g.produkt}" an {g.kaufer}</span>
+                        <span>Einnahme: Ware "{g.produkt}" ({g.menge} {g.einheit}) an {g.kaufer}</span>
                         <span className="font-bold text-emerald-400">+{calculateGoodTotalPrice(g)} €</span>
                       </div>
                     ))}
                     {boughtGoodsExpenses.map(g => (
                       <div key={g.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
-                        <span>Ausgabe: Ware "{g.produkt}" von {g.ersteller}</span>
+                        <span>Ausgabe: Ware "{g.produkt}" ({g.menge} {g.einheit}) von {g.ersteller}</span>
                         <span className="font-bold text-red-400">-{calculateGoodTotalPrice(g)} €</span>
                       </div>
                     ))}
