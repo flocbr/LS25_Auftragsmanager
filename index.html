@@ -16,7 +16,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const API_URL = "https://script.google.com/macros/s/AKfycbyIYLKY7m0POxhbH5skiHhZ2zO-_atesw2FkZaPfjgwCY48fXuI8gU5hnMKvBo57jAa/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbz144OAf3LQYEnIwK4huzwO2xnqqoYdiSyLMk_NuqtMKsozlY6PiuwBS3EyZ8UB7OQx/exec";
 
     const VEHICLE_CATEGORIES = [
       'Trecker',
@@ -168,7 +168,6 @@
       const soldGoodsEarnings = waren.filter(g => g.ersteller === userName && (v => (v.status || '').toLowerCase() === 'verkauft')(g));
       const boughtGoodsExpenses = waren.filter(g => g.kaufer === userName && (v => (v.status || '').toLowerCase() === 'verkauft')(g));
 
-      // Berechnung des Warenpreises (bei Litern pro 1000L, bei Paletten/Stück direkt pro Stk.)
       const calculateGoodTotalPrice = (g) => {
         const qty = Number(g.gewünschteMenge) || Number(g.menge) || 0;
         const unitPrice = parseFloat(g.preis) || 0;
@@ -626,4 +625,132 @@
                     id: "ORDER-" + Date.now(),
                     feld: orderForm.feld,
                     taetigkeit: orderForm.taetigkeit,
-                    hektar: ['Logistik & Transport', 'Maschinenverleih', 'Sonstiges'].includes(orderForm.ta
+                    hektar: ['Logistik & Transport', 'Maschinenverleih', 'Sonstiges'].includes(orderForm.taetigkeit) ? 0 : (parseFloat(orderForm.hektar) || 0),
+                    preis: calculateOrderPrice(),
+                    duengerOption: ['Düngen', 'Kalken'].includes(orderForm.taetigkeit) ? orderForm.duengerOption : '-',
+                    ersteller: userName,
+                    beschreibung: orderForm.beschreibung
+                  });
+                  setIsOrderModalOpen(false);
+                }} className="space-y-4 text-sm">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Feld auswählen</label>
+                    <select value={orderForm.feld} onChange={(e) => setOrderForm({ ...orderForm, feld: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                      <option value="Kein Feld / Logistik">Kein Feld / Logistik</option>
+                      {Array.from({ length: 50 }, (_, i) => <option key={i + 1} value={`Feld ${i + 1}`}>Feld {i + 1}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Tätigkeit</label>
+                    <select value={orderForm.taetigkeit} onChange={(e) => setOrderForm({ ...orderForm, taetigkeit: e.target.value, manuellerPreis: '' })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                      {Object.keys(BASE_RATES).map((rate) => <option key={rate} value={rate}>{rate} {BASE_RATES[rate] > 0 ? `(${BASE_RATES[rate]} €/ha)` : ''}</option>)}
+                    </select>
+                  </div>
+                  {!['Logistik & Transport', 'Maschinenverleih', 'Sonstiges'].includes(orderForm.taetigkeit) && (
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Fläche (ha)</label>
+                      <input type="number" step="0.1" value={orderForm.hektar} onChange={(e) => setOrderForm({ ...orderForm, hektar: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" />
+                    </div>
+                  )}
+                  {['Düngen', 'Kalken'].includes(orderForm.taetigkeit) && (
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs space-y-2">
+                      <label className="font-bold text-slate-300">Material-Herkunft</label>
+                      <label className="flex items-center gap-2"><input type="radio" name="duenger" value="hof_eigen" checked={orderForm.duengerOption === 'hof_eigen'} onChange={(e) => setOrderForm({ ...orderForm, duengerOption: e.target.value })} /> Hof-eigener Dünger/Kalk</label>
+                      <label className="flex items-center gap-2"><input type="radio" name="duenger" value="lohner_material" checked={orderForm.duengerOption === 'lohner_material'} onChange={(e) => setOrderForm({ ...orderForm, duengerOption: e.target.value })} /> Lohner bringt Material mit (+100 €/ha)</label>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Preis (€) - Optional überschreiben</label>
+                    <input type="number" placeholder={calculateOrderPrice() + " € (Automatisch)"} value={orderForm.manuellerPreis} onChange={(e) => setOrderForm({ ...orderForm, manuellerPreis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Zusatzinfos / Notizen</label>
+                    <textarea rows="2" placeholder="z.B. Stroh bitte ablegen..." value={orderForm.beschreibung} onChange={(e) => setOrderForm({ ...orderForm, beschreibung: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5"></textarea>
+                  </div>
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl flex justify-between items-center text-xs">
+                    <span>Finaler Preis (100er gerundet):</span>
+                    <span className="text-lg font-black text-emerald-400">{calculateOrderPrice()} €</span>
+                  </div>
+                  <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition">Auftrag veröffentlichen</button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: FAHRZEUG ANBIETEN */}
+          {isVehicleModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Fahrzeug / Maschine anbieten</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  sendAction('fahrzeug', 'create', { id: "VEH-" + Date.now(), name: vehicleForm.name, kategorie: vehicleForm.kategorie, preis: vehicleForm.preis, ersteller: userName });
+                  setIsVehicleModalOpen(false);
+                  setVehicleForm({ name: '', kategorie: 'Trecker', preis: '' });
+                }} className="space-y-3 text-sm">
+                  <input type="text" placeholder="Fahrzeugname (z.B. Fendt 728 Vario)" value={vehicleForm.name} onChange={(e) => setVehicleForm({ ...vehicleForm, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <select value={vehicleForm.kategorie} onChange={(e) => setVehicleForm({ ...vehicleForm, kategorie: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                    {VEHICLE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                  <input type="number" placeholder="Festpreis in €" value={vehicleForm.preis} onChange={(e) => setVehicleForm({ ...vehicleForm, preis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setIsVehicleModalOpen(false)} className="w-1/2 bg-slate-800 p-2.5 rounded-xl text-xs">Abbrechen</button>
+                    <button type="submit" className="w-1/2 bg-emerald-600 text-white p-2.5 rounded-xl text-xs">Erstellen</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: WARE ANBIETEN */}
+          {isGoodModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Produkt / Ware anbieten</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  sendAction('ware', 'create', { id: "GOOD-" + Date.now(), produkt: goodForm.produkt, menge: goodForm.menge, einheit: goodForm.einheit, preis: goodForm.preis, ersteller: userName });
+                  setIsGoodModalOpen(false);
+                  setGoodForm({ produkt: '', menge: '', einheit: 'Liter (L)', preis: '' });
+                }} className="space-y-3 text-sm">
+                  <input type="text" placeholder="Produkt (z.B. Weizen, Zucker, Paletten)" value={goodForm.produkt} onChange={(e) => setGoodForm({ ...goodForm, produkt: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <input type="number" placeholder="Verfügbare Menge (z.B. 100000 oder 10)" value={goodForm.menge} onChange={(e) => setGoodForm({ ...goodForm, menge: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <select value={goodForm.einheit} onChange={(e) => setGoodForm({ ...goodForm, einheit: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                    <option value="Liter (L)">Liter (L)</option>
+                    <option value="Palette">Palette</option>
+                    <option value="Ballen">Ballen</option>
+                    <option value="Stück">Stück</option>
+                  </select>
+                  <input type="number" placeholder="Preis in € (pro 1.000L / pro Stk.)" value={goodForm.preis} onChange={(e) => setGoodForm({ ...goodForm, preis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <p className="text-[11px] text-slate-400 italic">Hinweis: Bei Liter gilt der Preis pro 1.000L (z.B. 360 €), bei Paletten/Stück pro einzelner Einheit.</p>
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setIsGoodModalOpen(false)} className="w-1/2 bg-slate-800 p-2.5 rounded-xl text-xs">Abbrechen</button>
+                    <button type="submit" className="w-1/2 bg-emerald-600 text-white p-2.5 rounded-xl text-xs">Veröffentlichen</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* PROFIL MODAL */}
+          {isEditingProfile && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Hofname ändern</h3>
+                <input type="text" value={tempUserName} onChange={(e) => setTempUserName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm" />
+                <div className="flex gap-2">
+                  <button onClick={() => setIsEditingProfile(false)} className="w-1/2 bg-slate-800 p-2 rounded-xl text-xs">Abbrechen</button>
+                  <button onClick={handleSaveProfile} className="w-1/2 bg-emerald-600 p-2 rounded-xl text-xs text-white">Speichern</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
