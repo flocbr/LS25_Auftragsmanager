@@ -409,4 +409,369 @@
             {/* TAB 4: WAREN & PRODUKTE */}
             {activeTab === 'goods' && (
               <div className="space-y-6">
-                <div className="flex justify-between items-
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-bold">Waren- & Produktmarkt</h2>
+                  <button onClick={() => setIsGoodModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition">
+                    + Ware anbieten
+                  </button>
+                </div>
+
+                {waren.length === 0 ? (
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Aktuell werden keine Waren angeboten.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {waren.map((g) => (
+                      <div key={g.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{g.einheit}</span>
+                            <h3 className="font-bold text-lg mt-2">{g.produkt}</h3>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xl font-black text-emerald-400">{g.preis} €</span>
+                            <p className="text-[10px] text-slate-400">Verfügbar: {g.menge}</p>
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                          <p>Verkäufer: <strong className="text-slate-200">{g.ersteller}</strong></p>
+                          {g.gewünschteMenge > 0 && <p className="text-amber-400 font-bold">Kaufanfrage von {g.kaufer}: {g.gewünschteMenge} {g.einheit}</p>}
+                        </div>
+
+                        {g.ersteller === userName ? (
+                          <div className="space-y-2">
+                            {g.gewünschteMenge > 0 && (
+                              <button 
+                                onClick={() => {
+                                  sendAction('ware', 'updateStatus', { id: g.id, status: 'Verkauft', menge: Number(g.menge) - Number(g.gewünschteMenge), gewünschteMenge: 0 });
+                                  sendAction('chat', 'create', { sender: userName, empfaenger: g.kaufer, text: `Der Kauf für ${g.gewünschteMenge} ${g.einheit} ${g.produkt} wurde akzeptiert!`, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+                                }}
+                                className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2 rounded-xl transition"
+                              >
+                                Verkauf an {g.kaufer} ({g.gewünschteMenge} {g.einheit}) bestätigen
+                              </button>
+                            )}
+                            <button onClick={() => sendAction('ware', 'delete', { id: g.id })} className="w-full bg-slate-800 hover:bg-red-600/30 text-slate-300 text-xs py-2 rounded-xl transition">
+                              Angebot löschen
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <input 
+                              type="number" 
+                              placeholder="Menge" 
+                              id={`buy-qty-${g.id}`}
+                              className="w-1/3 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100" 
+                            />
+                            <button 
+                              onClick={() => {
+                                const qty = document.getElementById(`buy-qty-${g.id}`).value;
+                                if (!qty || qty <= 0) return alert("Bitte gültige Menge eingeben!");
+                                sendAction('ware', 'updateStatus', { id: g.id, gewünschteMenge: qty, kaufer: userName });
+                                sendAction('chat', 'create', { sender: userName, empfaenger: g.ersteller, text: `Ich möchte ${qty} ${g.einheit} von deinem Angebot "${g.produkt}" kaufen!`, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+                              }}
+                              className="w-2/3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-2 rounded-xl transition"
+                            >
+                              Kauf anfragen
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 5: NACHRICHTEN / CHAT */}
+            {activeTab === 'chat' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* LINKE SPALTE: KAUFANFRAGEN */}
+                <div className="space-y-4">
+                  <h3 className="font-bold text-md text-emerald-400">Offene Kaufanfragen / Rückmeldungen</h3>
+                  
+                  {vehicleRequests.length === 0 && goodRequests.length === 0 ? (
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-xs text-slate-400">Keine aktiven Kaufanfragen zu deinen Angeboten.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {vehicleRequests.map(v => (
+                        <div key={v.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2 text-xs">
+                          <span className="font-bold text-slate-200">🚜 Fahrzeug: {v.name}</span>
+                          <p className="text-slate-400">Interessent: <strong className="text-emerald-400">{v.kaufer}</strong></p>
+                          {v.ersteller === userName ? (
+                            <button 
+                              onClick={() => {
+                                sendAction('fahrzeug', 'updateStatus', { id: v.id, status: 'Verkauft' });
+                                sendAction('chat', 'create', { sender: userName, empfaenger: v.kaufer, text: `Kauf von ${v.name} wurde bestätigt!`, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+                              }}
+                              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded-lg"
+                            >
+                              Kauf von {v.kaufer} akzeptieren
+                            </button>
+                          ) : (
+                            <span className="block text-[11px] text-amber-400">Anfrage gesendet! Wartet auf Verkäufer-Bestätigung.</span>
+                          )}
+                        </div>
+                      ))}
+
+                      {goodRequests.map(g => (
+                        <div key={g.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2 text-xs">
+                          <span className="font-bold text-slate-200">📦 Ware: {g.produkt}</span>
+                          <p className="text-slate-400">Käufer: <strong className="text-emerald-400">{g.kaufer}</strong> ({g.gewünschteMenge} {g.einheit})</p>
+                          {g.ersteller === userName ? (
+                            <button 
+                              onClick={() => {
+                                sendAction('ware', 'updateStatus', { id: g.id, status: 'Verkauft', menge: Number(g.menge) - Number(g.gewünschteMenge), gewünschteMenge: 0 });
+                                sendAction('chat', 'create', { sender: userName, empfaenger: g.kaufer, text: `Verkauf von ${g.gewünschteMenge} ${g.einheit} ${g.produkt} wurde bestätigt!`, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+                              }}
+                              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded-lg"
+                            >
+                              Verkauf an {g.kaufer} akzeptieren
+                            </button>
+                          ) : (
+                            <span className="block text-[11px] text-amber-400">Mengenanfrage gesendet! Wartet auf Verkäufer.</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* RECHTE SPALTE: SERVER CHAT */}
+                <div className="md:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between h-[500px]">
+                  <h3 className="font-bold text-md border-b border-slate-800 pb-2">Server-Chat / Verhandlung</h3>
+                  
+                  <div className="flex-grow overflow-y-auto space-y-3 py-4">
+                    {chatMessages.length === 0 ? (
+                      <p className="text-center text-xs text-slate-500">Noch keine Nachrichten vorhanden.</p>
+                    ) : (
+                      chatMessages.map(m => (
+                        <div key={m.id} className={`flex flex-col ${m.sender === userName ? 'items-end' : 'items-start'}`}>
+                          <div className={`max-w-[80%] p-3 rounded-2xl text-xs space-y-1 ${m.sender === userName ? 'bg-emerald-600 text-white rounded-br-none' : 'bg-slate-950 border border-slate-800 text-slate-200 rounded-bl-none'}`}>
+                            <div className="flex justify-between gap-4 font-bold text-[10px] opacity-75">
+                              <span>{m.sender}</span>
+                              <span>{m.timestamp}</span>
+                            </div>
+                            <p>{m.text}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <form onSubmit={handleSendMessage} className="flex gap-2 border-t border-slate-800 pt-3">
+                    <input 
+                      type="text" 
+                      placeholder="Nachricht schreiben..." 
+                      value={chatInput} 
+                      onChange={(e) => setChatInput(e.target.value)} 
+                      className="flex-grow bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-100" 
+                    />
+                    <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-bold">Senden</button>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 6: STATISTIKEN & FINANZEN */}
+            {activeTab === 'finance' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-bold">Statistiken & Finanzen</h2>
+                  <button onClick={handleResetFinance} className="bg-slate-800 hover:bg-red-900/50 text-slate-300 text-xs px-3 py-1.5 rounded-xl border border-slate-700 transition">
+                    🔄 Statistiken zurücksetzen
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                    <span className="text-xs uppercase text-slate-400">Einnahmen (Aufträge & Handel)</span>
+                    <div className="text-2xl font-black text-emerald-400 mt-1">+{totalEarnings} €</div>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                    <span className="text-xs uppercase text-slate-400">Ausgaben</span>
+                    <div className="text-2xl font-black text-red-400 mt-1">-{totalExpenses} €</div>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                    <span className="text-xs uppercase text-slate-400">Netto-Differenz</span>
+                    <div className={`text-2xl font-black mt-1 ${netBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {netBalance >= 0 ? `+${netBalance}` : netBalance} €
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                  <h3 className="font-bold text-md border-b border-slate-800 pb-2">Verbuchte Transaktionen</h3>
+                  
+                  <div className="space-y-2 text-xs">
+                    {paidAuftraegeEarnings.map(c => (
+                      <div key={c.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Einnahme: Auftrag "{c.taetigkeit}" ({c.feld})</span>
+                        <span className="font-bold text-emerald-400">+{c.preis} €</span>
+                      </div>
+                    ))}
+                    {paidAuftraegeExpenses.map(c => (
+                      <div key={c.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Ausgabe: Auftrag "{c.taetigkeit}" ({c.feld}) an {c.auftragnehmer}</span>
+                        <span className="font-bold text-red-400">-{c.preis} €</span>
+                      </div>
+                    ))}
+                    {soldVehiclesEarnings.map(v => (
+                      <div key={v.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Einnahme: Fahrzeug "{v.name}" an {v.kaufer}</span>
+                        <span className="font-bold text-emerald-400">+{v.preis} €</span>
+                      </div>
+                    ))}
+                    {soldGoodsEarnings.map(g => (
+                      <div key={g.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Einnahme: Ware "{g.produkt}" an {g.kaufer}</span>
+                        <span className="font-bold text-emerald-400">+{g.preis} €</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </main>
+
+          {/* MODAL: AUFTRAG ERSTELLEN */}
+          {isOrderModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                  <h3 className="font-bold text-lg">Neuen Auftrag erstellen</h3>
+                  <button onClick={() => setIsOrderModalOpen(false)} className="text-slate-400">✕</button>
+                </div>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  sendAction('auftrag', 'create', {
+                    id: "ORDER-" + Date.now(),
+                    feld: orderForm.feld,
+                    taetigkeit: orderForm.taetigkeit,
+                    hektar: ['Logistik & Transport', 'Maschinenverleih', 'Sonstiges'].includes(orderForm.taetigkeit) ? 0 : (parseFloat(orderForm.hektar) || 0),
+                    preis: calculateOrderPrice(),
+                    duengerOption: ['Düngen', 'Kalken'].includes(orderForm.taetigkeit) ? orderForm.duengerOption : '-',
+                    ersteller: userName,
+                    beschreibung: orderForm.beschreibung
+                  });
+                  setIsOrderModalOpen(false);
+                }} className="space-y-4 text-sm">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Feld auswählen</label>
+                    <select value={orderForm.feld} onChange={(e) => setOrderForm({ ...orderForm, feld: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                      <option value="Kein Feld / Logistik">Kein Feld / Logistik</option>
+                      {Array.from({ length: 50 }, (_, i) => <option key={i + 1} value={`Feld ${i + 1}`}>Feld {i + 1}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Tätigkeit</label>
+                    <select value={orderForm.taetigkeit} onChange={(e) => setOrderForm({ ...orderForm, taetigkeit: e.target.value, manuellerPreis: '' })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                      {Object.keys(BASE_RATES).map((rate) => <option key={rate} value={rate}>{rate} {BASE_RATES[rate] > 0 ? `(${BASE_RATES[rate]} €/ha)` : ''}</option>)}
+                    </select>
+                  </div>
+                  {!['Logistik & Transport', 'Maschinenverleih', 'Sonstiges'].includes(orderForm.taetigkeit) && (
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Fläche (ha)</label>
+                      <input type="number" step="0.1" value={orderForm.hektar} onChange={(e) => setOrderForm({ ...orderForm, hektar: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" />
+                    </div>
+                  )}
+                  {['Düngen', 'Kalken'].includes(orderForm.taetigkeit) && (
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs space-y-2">
+                      <label className="font-bold text-slate-300">Material-Herkunft</label>
+                      <label className="flex items-center gap-2"><input type="radio" name="duenger" value="hof_eigen" checked={orderForm.duengerOption === 'hof_eigen'} onChange={(e) => setOrderForm({ ...orderForm, duengerOption: e.target.value })} /> Hof-eigener Dünger/Kalk</label>
+                      <label className="flex items-center gap-2"><input type="radio" name="duenger" value="lohner_material" checked={orderForm.duengerOption === 'lohner_material'} onChange={(e) => setOrderForm({ ...orderForm, duengerOption: e.target.value })} /> Lohner bringt Material mit (+100 €/ha)</label>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Preis (€) - Optional überschreiben</label>
+                    <input type="number" placeholder={calculateOrderPrice() + " € (Automatisch)"} value={orderForm.manuellerPreis} onChange={(e) => setOrderForm({ ...orderForm, manuellerPreis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Zusatzinfos / Notizen</label>
+                    <textarea rows="2" placeholder="z.B. Stroh bitte ablegen..." value={orderForm.beschreibung} onChange={(e) => setOrderForm({ ...orderForm, beschreibung: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5"></textarea>
+                  </div>
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl flex justify-between items-center text-xs">
+                    <span>Finaler Preis (100er gerundet):</span>
+                    <span className="text-lg font-black text-emerald-400">{calculateOrderPrice()} €</span>
+                  </div>
+                  <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition">Auftrag veröffentlichen</button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: FAHRZEUG ANBIETEN */}
+          {isVehicleModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Fahrzeug zum Verkauf anbieten</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  sendAction('fahrzeug', 'create', { id: "VEH-" + Date.now(), name: vehicleForm.name, preis: vehicleForm.preis, ersteller: userName });
+                  setIsVehicleModalOpen(false);
+                  setVehicleForm({ name: '', preis: '' });
+                }} className="space-y-3 text-sm">
+                  <input type="text" placeholder="Fahrzeugname (z.B. Fendt 728 Vario)" value={vehicleForm.name} onChange={(e) => setVehicleForm({ ...vehicleForm, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <input type="number" placeholder="Festpreis in €" value={vehicleForm.preis} onChange={(e) => setVehicleForm({ ...vehicleForm, preis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setIsVehicleModalOpen(false)} className="w-1/2 bg-slate-800 p-2.5 rounded-xl text-xs">Abbrechen</button>
+                    <button type="submit" className="w-1/2 bg-emerald-600 text-white p-2.5 rounded-xl text-xs">Erstellen</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: WARE ANBIETEN */}
+          {isGoodModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Produkt / Ware anbieten</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  sendAction('ware', 'create', { id: "GOOD-" + Date.now(), produkt: goodForm.produkt, menge: goodForm.menge, einheit: goodForm.einheit, preis: goodForm.preis, ersteller: userName });
+                  setIsGoodModalOpen(false);
+                  setGoodForm({ produkt: '', menge: '', einheit: 'Liter (L)', preis: '' });
+                }} className="space-y-3 text-sm">
+                  <input type="text" placeholder="Produkt (z.B. Weizen, Saatgut, Wolle)" value={goodForm.produkt} onChange={(e) => setGoodForm({ ...goodForm, produkt: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <input type="number" placeholder="Verfügbare Menge (z.B. 10000)" value={goodForm.menge} onChange={(e) => setGoodForm({ ...goodForm, menge: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <select value={goodForm.einheit} onChange={(e) => setGoodForm({ ...goodForm, einheit: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                    <option value="Liter (L)">Liter (L)</option>
+                    <option value="Palette">Palette</option>
+                    <option value="Ballen">Ballen</option>
+                    <option value="Stück">Stück</option>
+                  </select>
+                  <input type="number" placeholder="Preis total oder pro Einheit in €" value={goodForm.preis} onChange={(e) => setGoodForm({ ...goodForm, preis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setIsGoodModalOpen(false)} className="w-1/2 bg-slate-800 p-2.5 rounded-xl text-xs">Abbrechen</button>
+                    <button type="submit" className="w-1/2 bg-emerald-600 text-white p-2.5 rounded-xl text-xs">Veröffentlichen</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* PROFIL MODAL */}
+          {isEditingProfile && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Hofname ändern</h3>
+                <input type="text" value={tempUserName} onChange={(e) => setTempUserName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm" />
+                <div className="flex gap-2">
+                  <button onClick={() => setIsEditingProfile(false)} className="w-1/2 bg-slate-800 p-2 rounded-xl text-xs">Abbrechen</button>
+                  <button onClick={handleSaveProfile} className="w-1/2 bg-emerald-600 p-2 rounded-xl text-xs text-white">Speichern</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
