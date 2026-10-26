@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hof Manager</title>
+  <title>Hofmanager</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -16,7 +16,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const API_URL = "https://script.google.com/macros/s/AKfycbweHOdWtkd06vrVAQZBsnE3rTyfZI2ZUBgyyioBR3YOqxWbeYSuTj7RxmF37yIBXqGm/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbzYavC9CmYc-RpzfKsR565xHdrXUy73_n9muS02JGb0TWiKupnafow_6flO1-clcKIi/exec";
 
     const VEHICLE_CATEGORIES = [
       'Trecker',
@@ -151,27 +151,27 @@
       const myAuftraege = auftraege.filter(c => c.ersteller === userName);
       const myAcceptedAuftraege = auftraege.filter(c => c.auftragnehmer === userName && ['in_bearbeitung', 'erledigt'].includes(c.status));
 
-      // Aktive Fahrzeuge (Verkaufte werden im Markt ausgeblendet)
-      const activeFahrzeuge = fahrzeuge.filter(v => v.status !== 'Verkauft');
+      // Aktive Fahrzeuge (Verkaufte mit Status "Verkauft" werden im Markt ausgeblendet)
+      const activeFahrzeuge = fahrzeuge.filter(v => (v.status || '').toLowerCase() !== 'verkauft');
       const filteredFahrzeuge = activeFahrzeuge.filter(v => selectedCategory === 'Alle' || v.kategorie === selectedCategory);
 
-      // Aktive Waren (Ausverkaufte/Verkaufte ausblenden)
-      const activeWaren = waren.filter(g => g.status !== 'Verkauft' && Number(g.menge) > 0);
+      // Aktive Waren
+      const activeWaren = waren.filter(g => (g.status || '').toLowerCase() !== 'verkauft' && Number(g.menge) > 0);
 
       // BENACHRICHTIGUNGSPUNKTE (BADGES)
       const vehiclePendingCount = fahrzeuge.filter(v => v.ersteller === userName && v.status === 'Angefragt').length;
       const goodPendingCount = waren.filter(g => g.ersteller === userName && Number(g.gewünschteMenge) > 0).length;
       const orderPendingCount = myAuftraege.filter(c => c.status === 'erledigt').length;
 
-      // FINANZ-LOGIK (Verbuchung erst wenn bezahlt / verkauft)
+      // FINANZ-LOGIK
       const paidAuftraegeEarnings = auftraege.filter(c => c.auftragnehmer === userName && c.status === 'bezahlt');
       const paidAuftraegeExpenses = auftraege.filter(c => c.ersteller === userName && c.status === 'bezahlt');
 
-      const soldVehiclesEarnings = fahrzeuge.filter(v => v.ersteller === userName && v.status === 'Verkauft');
-      const boughtVehiclesExpenses = fahrzeuge.filter(v => v.kaufer === userName && v.status === 'Verkauft');
+      const soldVehiclesEarnings = fahrzeuge.filter(v => v.ersteller === userName && (v.status || '').toLowerCase() === 'verkauft');
+      const boughtVehiclesExpenses = fahrzeuge.filter(v => v.kaufer === userName && (v.status || '').toLowerCase() === 'verkauft');
 
-      const soldGoodsEarnings = waren.filter(g => g.ersteller === userName && g.status === 'Verkauft');
-      const boughtGoodsExpenses = waren.filter(g => g.kaufer === userName && g.status === 'Verkauft');
+      const soldGoodsEarnings = waren.filter(g => g.ersteller === userName && (g.status || '').toLowerCase() === 'verkauft');
+      const boughtGoodsExpenses = waren.filter(g => g.kaufer === userName && (g.status || '').toLowerCase() === 'verkauft');
 
       const totalEarnings = paidAuftraegeEarnings.reduce((sum, c) => sum + (Number(c.preis) || 0), 0)
         + soldVehiclesEarnings.reduce((sum, v) => sum + (Number(v.preis) || 0), 0)
@@ -470,7 +470,7 @@
                             <h3 className="font-bold text-lg mt-2">{g.produkt}</h3>
                           </div>
                           <div className="text-right">
-                            <span className="text-xl font-black text-emerald-400">{g.preis} €</span>
+                            <span className="text-xl font-black text-emerald-400">{g.preis} € <span className="text-[10px] text-slate-400 font-normal">pro 1.000L</span></span>
                             <p className="text-[10px] text-slate-400">Verfügbar: {g.menge}</p>
                           </div>
                         </div>
@@ -740,7 +740,8 @@
                     <option value="Ballen">Ballen</option>
                     <option value="Stück">Stück</option>
                   </select>
-                  <input type="number" placeholder="Preis total oder pro Einheit in €" value={goodForm.preis} onChange={(e) => setGoodForm({ ...goodForm, preis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <input type="number" placeholder="Preis in € (pro 1.000L / Einheit)" value={goodForm.preis} onChange={(e) => setGoodForm({ ...goodForm, preis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <p className="text-[11px] text-slate-400 italic">Hinweis: Der Preis versteht sich pro 1.000 Liter (oder pro Einheit).</p>
                   <div className="flex gap-2 pt-2">
                     <button type="button" onClick={() => setIsGoodModalOpen(false)} className="w-1/2 bg-slate-800 p-2.5 rounded-xl text-xs">Abbrechen</button>
                     <button type="submit" className="w-1/2 bg-emerald-600 text-white p-2.5 rounded-xl text-xs">Veröffentlichen</button>
