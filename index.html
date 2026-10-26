@@ -158,4 +158,599 @@
       const goodPendingCount = waren.filter(g => g.ersteller === userName && Number(g.gewünschteMenge) > 0).length;
       const orderPendingCount = myAuftraege.filter(c => c.status === 'erledigt').length;
 
-      // FIN
+      // FINANZ-LOGIK
+      const paidAuftraegeEarnings = auftraege.filter(c => c.auftragnehmer === userName && (c.status || '').toString().trim().toLowerCase() === 'bezahlt');
+      const paidAuftraegeExpenses = auftraege.filter(c => c.ersteller === userName && (c.status || '').toString().trim().toLowerCase() === 'bezahlt');
+
+      const soldVehiclesEarnings = fahrzeuge.filter(v => v.ersteller === userName && (v.status || '').toString().trim().toLowerCase() === 'verkauft');
+      const boughtVehiclesExpenses = fahrzeuge.filter(v => v.kaufer === userName && (v.status || '').toString().trim().toLowerCase() === 'verkauft');
+
+      const soldGoodsEarnings = waren.filter(g => g.ersteller === userName && ((g.status || '').toString().trim().toLowerCase() === 'verkauft' || Number(g.menge) === 0));
+      const boughtGoodsExpenses = waren.filter(g => g.kaufer === userName && ((g.status || '').toString().trim().toLowerCase() === 'verkauft' || Number(g.menge) === 0));
+
+      const calculateGoodTotalPrice = (g) => {
+        const qty = Number(g.gewünschteMenge) || Number(g.menge) || 0;
+        const unitPrice = parseFloat(g.preis) || 0;
+        if (g.einheit && g.einheit.includes('Liter')) {
+          return Math.round((qty / 1000) * unitPrice);
+        }
+        return Math.round(qty * unitPrice);
+      };
+
+      const totalEarnings = paidAuftraegeEarnings.reduce((sum, c) => sum + (parseFloat(c.preis) || 0), 0)
+        + soldVehiclesEarnings.reduce((sum, v) => sum + (parseFloat(v.preis) || 0), 0)
+        + soldGoodsEarnings.reduce((sum, g) => sum + calculateGoodTotalPrice(g), 0);
+
+      const totalExpenses = paidAuftraegeExpenses.reduce((sum, c) => sum + (parseFloat(c.preis) || 0), 0)
+        + boughtVehiclesExpenses.reduce((sum, v) => sum + (parseFloat(v.preis) || 0), 0)
+        + boughtGoodsExpenses.reduce((sum, g) => sum + calculateGoodTotalPrice(g), 0);
+
+      const netBalance = totalEarnings - totalExpenses;
+
+      return (
+        <div className="flex flex-col min-h-screen">
+          
+          {/* HEADER */}
+          <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40 px-4 py-3">
+            <div className="max-w-6xl mx-auto flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20 text-emerald-400 font-bold">🚜</div>
+                <div>
+                  <h1 className="font-bold text-lg text-slate-100 leading-tight">Hofmanager</h1>
+                  <p className="text-xs text-slate-400 flex items-center gap-1">
+                    <span className={`w-2 h-2 rounded-full ${loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></span>
+                    {loading ? 'Synchronisiere...' : lastSync ? `Live (${lastSync.toLocaleTimeString()})` : 'Aktiv'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setIsOrderModalOpen(true)}
+                  className="hidden sm:flex bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-xl shadow-lg transition text-sm"
+                >
+                  + Auftrag erstellen
+                </button>
+                <button 
+                  onClick={() => { setTempUserName(userName); setIsEditingProfile(true); }}
+                  className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-700 transition"
+                >
+                  <span className="text-emerald-400">👤</span>
+                  <span className="font-medium text-sm text-slate-200">{userName}</span>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* NAVIGATION TABS */}
+          <nav className="bg-slate-900/60 border-b border-slate-800 px-4 overflow-x-auto">
+            <div className="max-w-6xl mx-auto flex space-x-2 whitespace-nowrap">
+              <button onClick={() => setActiveTab('marketplace')} className={`py-3 px-4 font-medium text-sm border-b-2 transition relative ${activeTab === 'marketplace' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
+                Auftrags-Angebote ({openAuftraege.length})
+                {orderPendingCount > 0 && <span className="ml-2 w-2 py-0.5 px-1 bg-red-500 rounded-full animate-pulse text-[10px] text-white">!</span>}
+              </button>
+              <button onClick={() => setActiveTab('active')} className={`py-3 px-4 font-medium text-sm border-b-2 transition ${activeTab === 'active' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
+                Meine Aktiven ({myAcceptedAuftraege.length})
+              </button>
+              <button onClick={() => setActiveTab('vehicles')} className={`py-3 px-4 font-medium text-sm border-b-2 transition relative ${activeTab === 'vehicles' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
+                Fahrzeugmarkt
+                {vehiclePendingCount > 0 && <span className="ml-2 w-2 py-0.5 px-1 bg-red-500 rounded-full animate-pulse text-[10px] text-white">!</span>}
+              </button>
+              <button onClick={() => setActiveTab('goods')} className={`py-3 px-4 font-medium text-sm border-b-2 transition relative ${activeTab === 'goods' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
+                Waren & Produkte
+                {goodPendingCount > 0 && <span className="ml-2 w-2 py-0.5 px-1 bg-red-500 rounded-full animate-pulse text-[10px] text-white">!</span>}
+              </button>
+              <button onClick={() => setActiveTab('finance')} className={`py-3 px-4 font-medium text-sm border-b-2 transition ${activeTab === 'finance' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
+                Statistiken & Finanzen
+              </button>
+            </div>
+          </nav>
+
+          {/* MAIN CONTENT */}
+          <main className="flex-grow max-w-6xl w-full mx-auto px-4 py-6 space-y-8">
+
+            {/* TAB 1: AUFTRAGS-ANGEBOTE */}
+            {activeTab === 'marketplace' && (
+              <div className="space-y-8">
+                <section>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-bold">Offene Server-Aufträge</h2>
+                    <button onClick={fetchData} className="text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-300">🔄 Aktualisieren</button>
+                  </div>
+
+                  {openAuftraege.length === 0 ? (
+                    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Aktuell keine freien Aufträge verfügbar.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {openAuftraege.map((c) => (
+                        <div key={c.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                          <div>
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <span className="text-xs font-semibold px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{c.feld}</span>
+                                <h3 className="font-bold text-lg mt-2">{c.taetigkeit}</h3>
+                              </div>
+                              <span className="text-xl font-black text-emerald-400">{c.preis} €</span>
+                            </div>
+                            <div className="text-xs text-slate-400 space-y-1 mt-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                              {c.hektar > 0 && <p><strong>Fläche:</strong> {c.hektar} ha</p>}
+                              <p><strong>Auftraggeber:</strong> {c.ersteller}</p>
+                              {c.beschreibung && <p className="italic text-slate-300 mt-1">"{c.beschreibung}"</p>}
+                            </div>
+                          </div>
+                          <button onClick={() => sendAction('auftrag', 'updateStatus', { id: c.id, status: 'in_bearbeitung', auftragnehmer: userName })} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-xl transition text-sm">
+                            Auftrag annehmen
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="pt-4 border-t border-slate-800">
+                  <h2 className="text-lg font-bold mb-4">Von mir erstellte Aufträge ({myAuftraege.length})</h2>
+                  {myAuftraege.length === 0 ? (
+                    <div className="bg-slate-900/30 border border-slate-800 rounded-2xl p-6 text-center text-slate-500 text-sm">Du hast noch keine Aufträge erstellt.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {myAuftraege.map((c) => (
+                        <div key={c.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800">{c.feld}</span>
+                              <span className="font-bold">{c.taetigkeit}</span>
+                              <span className="text-xs text-slate-400">({c.hektar} ha)</span>
+                            </div>
+                            <div className="text-xs text-slate-400 flex items-center gap-3 mt-1">
+                              <span>Preis: <strong className="text-emerald-400">{c.preis} €</strong></span>
+                              <span>Bearbeiter: <strong className="text-slate-200">{c.auftragnehmer || 'Niemand'}</strong></span>
+                            </div>
+                            {c.beschreibung && <p className="text-xs italic text-slate-500 mt-1">"{c.beschreibung}"</p>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs px-3 py-1 rounded-full font-medium bg-slate-800 text-slate-300">
+                              {c.status === 'offen' && 'Wartet auf Helfer'}
+                              {c.status === 'in_bearbeitung' && 'Wird bearbeitet'}
+                              {c.status === 'erledigt' && 'Erledigt (Auszahlung ausstehend)'}
+                              {c.status === 'bezahlt' && 'Bezahlt & Verbucht'}
+                            </span>
+                            {c.status === 'erledigt' && (
+                              <button onClick={() => sendAction('auftrag', 'updateStatus', { id: c.id, status: 'bezahlt' })} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-bold animate-pulse">
+                                Bezahlen & Buchen
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+
+            {/* TAB 2: MEINE AKTIVEN AUFTRÄGE */}
+            {activeTab === 'active' && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-bold mb-2">Von mir angenommene Arbeiten</h2>
+                {myAcceptedAuftraege.length === 0 ? (
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Du hast aktuell keine aktiven Aufträge.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {myAcceptedAuftraege.map((c) => (
+                      <div key={c.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded bg-slate-800 text-emerald-400">{c.feld}</span>
+                            <h3 className="font-bold text-lg mt-2">{c.taetigkeit}</h3>
+                          </div>
+                          <span className="text-xl font-black text-emerald-400">{c.preis} €</span>
+                        </div>
+                        {c.beschreibung && <p className="text-xs italic text-slate-400">"{c.beschreibung}"</p>}
+                        
+                        <div>
+                          {c.status === 'in_bearbeitung' ? (
+                            <button onClick={() => sendAction('auftrag', 'updateStatus', { id: c.id, status: 'erledigt' })} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl text-sm transition">
+                              Als erledigt markieren
+                            </button>
+                          ) : (
+                            <div className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs text-center py-2.5 rounded-xl font-medium">
+                              Erledigt! Wartet auf Auszahlung vom Auftraggeber.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: FAHRZEUGMARKT */}
+            {activeTab === 'vehicles' && (
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <h2 className="text-lg font-bold">Gebrauchtfahrzeuge & Maschinen</h2>
+                  <div className="flex items-center gap-3 w-full md:w-auto">
+                    <select 
+                      value={selectedCategory} 
+                      onChange={(e) => setSelectedCategory(e.target.value)} 
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200"
+                    >
+                      <option value="Alle">Alle Kategorien</option>
+                      {VEHICLE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                    <button onClick={() => setIsVehicleModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-4 py-2 rounded-xl transition whitespace-nowrap">
+                      + Fahrzeug anbieten
+                    </button>
+                  </div>
+                </div>
+
+                {filteredFahrzeuge.length === 0 ? (
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Keine Fahrzeuge in dieser Kategorie.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {filteredFahrzeuge.map((v) => (
+                      <div key={v.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                        <div>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">{v.kategorie || 'Sonstiges'}</span>
+                              <h3 className="font-bold text-lg text-slate-100 mt-1">{v.name}</h3>
+                            </div>
+                            <span className="text-lg font-black text-emerald-400">{v.preis} €</span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-2">Verkäufer: <strong className="text-slate-200">{v.ersteller}</strong></p>
+                        </div>
+
+                        <div className="space-y-2">
+                          {v.ersteller === userName ? (
+                            <div className="space-y-2">
+                              {(v.status || '').toLowerCase() === 'angefragt' ? (
+                                <button onClick={() => sendAction('fahrzeug', 'updateStatus', { id: v.id, status: 'Verkauft' })} className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 rounded-xl transition animate-pulse">
+                                  Kauf von {v.kaufer} bestätigen & verbuchen
+                                </button>
+                              ) : (
+                                <div className="text-xs text-center py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400">Dein Angebot (Verfügbar)</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              {(v.status || '').toLowerCase() === 'angefragt' && v.kaufer === userName ? (
+                                <div className="text-xs text-center py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold">
+                                  Wartet auf Verkäufer...
+                                </div>
+                              ) : (
+                                <button 
+                                  onClick={() => sendAction('fahrzeug', 'updateStatus', { id: v.id, status: 'Angefragt', kaufer: userName })}
+                                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-2 rounded-xl transition"
+                                >
+                                  Kaufinteresse / Anfragen
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 4: WAREN & PRODUKTE */}
+            {activeTab === 'goods' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-bold">Waren- & Produktmarkt</h2>
+                  <button onClick={() => setIsGoodModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition">
+                    + Ware anbieten
+                  </button>
+                </div>
+
+                {activeWaren.length === 0 ? (
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Aktuell werden keine Waren angeboten.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {activeWaren.map((g) => {
+                      const requestedQty = Number(g.gewünschteMenge) || 0;
+                      const hasRequest = requestedQty > 0;
+                      const calculatedPrice = calculateGoodTotalPrice(g);
+                      const remainingAfterSale = Number(g.menge) - requestedQty;
+                      const isLiter = g.einheit && g.einheit.includes('Liter');
+
+                      return (
+                        <div key={g.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{g.einheit}</span>
+                              <h3 className="font-bold text-lg mt-2">{g.produkt}</h3>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xl font-black text-emerald-400">
+                                {g.preis} € <span className="text-[10px] text-slate-400 font-normal">{isLiter ? 'pro 1.000L' : 'pro Stk.'}</span>
+                              </span>
+                              <p className="text-[10px] text-slate-400 font-bold">Verfügbar: {g.menge} {isLiter ? 'L' : ''}</p>
+                            </div>
+                          </div>
+
+                          <div className="text-xs text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                            <p>Verkäufer: <strong className="text-slate-200">{g.ersteller}</strong></p>
+                            {hasRequest && (
+                              <p className="text-amber-400 font-bold mt-1">
+                                📩 Anfrage von {g.kaufer}: {requestedQty} {isLiter ? 'L' : ''} (Gesamt: {calculatedPrice} €)
+                              </p>
+                            )}
+                          </div>
+
+                          {g.ersteller === userName ? (
+                            <div>
+                              {hasRequest ? (
+                                <button 
+                                  onClick={() => sendAction('ware', 'updateStatus', { 
+                                    id: g.id, 
+                                    status: remainingAfterSale <= 0 ? 'Verkauft' : 'verfügbar', 
+                                    menge: remainingAfterSale, 
+                                    gewünschteMenge: 0,
+                                    kaufer: g.kaufer
+                                  })}
+                                  className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2.5 rounded-xl transition animate-pulse"
+                                >
+                                  Verkauf an {g.kaufer} ({requestedQty} für {calculatedPrice} €) akzeptieren
+                                </button>
+                              ) : (
+                                <div className="text-xs text-center py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400">Dein Angebot (Verfügbar)</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              {hasRequest && g.kaufer === userName ? (
+                                <div className="text-xs text-center py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold">
+                                  Wartet auf Bestätigung von {g.ersteller}... ({requestedQty})
+                                </div>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <input 
+                                    type="number" 
+                                    placeholder={isLiter ? "Menge in L (z.B. 5000)" : "Menge (z.B. 2)"}
+                                    id={`buy-qty-${g.id}`}
+                                    className="w-1/2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100" 
+                                  />
+                                  <button 
+                                    onClick={() => {
+                                      const qty = parseFloat(document.getElementById(`buy-qty-${g.id}`).value);
+                                      if (!qty || qty <= 0 || qty > Number(g.menge)) return alert("Bitte eine gültige Menge eingeben (maximal " + g.menge + ")!");
+                                      sendAction('ware', 'updateStatus', { id: g.id, gewünschteMenge: qty, kaufer: userName });
+                                    }}
+                                    className="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-2 rounded-xl transition"
+                                  >
+                                    Teilkauf Anfragen
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 5: STATISTIKEN & FINANZEN */}
+            {activeTab === 'finance' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-bold">Statistiken & Finanzen</h2>
+                  <button onClick={handleResetFinance} className="bg-slate-800 hover:bg-red-900/50 text-slate-300 text-xs px-3 py-1.5 rounded-xl border border-slate-700 transition">
+                    🔄 Statistiken zurücksetzen
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                    <span className="text-xs uppercase text-slate-400">Einnahmen (Aufträge & Handel)</span>
+                    <div className="text-2xl font-black text-emerald-400 mt-1">+{totalEarnings} €</div>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                    <span className="text-xs uppercase text-slate-400">Ausgaben</span>
+                    <div className="text-2xl font-black text-red-400 mt-1">-{totalExpenses} €</div>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                    <span className="text-xs uppercase text-slate-400">Netto-Differenz</span>
+                    <div className={`text-2xl font-black mt-1 ${netBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {netBalance >= 0 ? `+${netBalance}` : netBalance} €
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                  <h3 className="font-bold text-md border-b border-slate-800 pb-2">Verbuchte Transaktionen</h3>
+                  
+                  <div className="space-y-2 text-xs">
+                    {paidAuftraegeEarnings.map(c => (
+                      <div key={c.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Einnahme: Auftrag "{c.taetigkeit}" ({c.feld})</span>
+                        <span className="font-bold text-emerald-400">+{c.preis} €</span>
+                      </div>
+                    ))}
+                    {paidAuftraegeExpenses.map(c => (
+                      <div key={c.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Ausgabe: Auftrag "{c.taetigkeit}" ({c.feld}) an {c.auftragnehmer}</span>
+                        <span className="font-bold text-red-400">-{c.preis} €</span>
+                      </div>
+                    ))}
+                    {soldVehiclesEarnings.map(v => (
+                      <div key={v.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Einnahme: Fahrzeug "{v.name}" an {v.kaufer}</span>
+                        <span className="font-bold text-emerald-400">+{v.preis} €</span>
+                      </div>
+                    ))}
+                    {boughtVehiclesExpenses.map(v => (
+                      <div key={v.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Ausgabe: Fahrzeug "{v.name}" von {v.ersteller}</span>
+                        <span className="font-bold text-red-400">-{v.preis} €</span>
+                      </div>
+                    ))}
+                    {soldGoodsEarnings.map(g => (
+                      <div key={g.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Einnahme: Ware "{g.produkt}" an {g.kaufer}</span>
+                        <span className="font-bold text-emerald-400">+{calculateGoodTotalPrice(g)} €</span>
+                      </div>
+                    ))}
+                    {boughtGoodsExpenses.map(g => (
+                      <div key={g.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Ausgabe: Ware "{g.produkt}" von {g.ersteller}</span>
+                        <span className="font-bold text-red-400">-{calculateGoodTotalPrice(g)} €</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </main>
+
+          {/* MODAL: AUFTRAG ERSTELLEN */}
+          {isOrderModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                  <h3 className="font-bold text-lg">Neuen Auftrag erstellen</h3>
+                  <button onClick={() => setIsOrderModalOpen(false)} className="text-slate-400">✕</button>
+                </div>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  sendAction('auftrag', 'create', {
+                    id: "ORDER-" + Date.now(),
+                    feld: orderForm.feld,
+                    taetigkeit: orderForm.taetigkeit,
+                    hektar: ['Logistik & Transport', 'Maschinenverleih', 'Sonstiges'].includes(orderForm.taetigkeit) ? 0 : (parseFloat(orderForm.hektar) || 0),
+                    preis: calculateOrderPrice(),
+                    duengerOption: ['Düngen', 'Kalken'].includes(orderForm.taetigkeit) ? orderForm.duengerOption : '-',
+                    ersteller: userName,
+                    beschreibung: orderForm.beschreibung
+                  });
+                  setIsOrderModalOpen(false);
+                }} className="space-y-4 text-sm">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Feld auswählen</label>
+                    <select value={orderForm.feld} onChange={(e) => setOrderForm({ ...orderForm, feld: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                      <option value="Kein Feld / Logistik">Kein Feld / Logistik</option>
+                      {Array.from({ length: 50 }, (_, i) => <option key={i + 1} value={`Feld ${i + 1}`}>Feld {i + 1}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Tätigkeit</label>
+                    <select value={orderForm.taetigkeit} onChange={(e) => setOrderForm({ ...orderForm, taetigkeit: e.target.value, manuellerPreis: '' })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                      {Object.keys(BASE_RATES).map((rate) => <option key={rate} value={rate}>{rate} {BASE_RATES[rate] > 0 ? `(${BASE_RATES[rate]} €/ha)` : ''}</option>)}
+                    </select>
+                  </div>
+                  {!['Logistik & Transport', 'Maschinenverleih', 'Sonstiges'].includes(orderForm.taetigkeit) && (
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Fläche (ha)</label>
+                      <input type="number" step="0.1" value={orderForm.hektar} onChange={(e) => setOrderForm({ ...orderForm, hektar: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" />
+                    </div>
+                  )}
+                  {['Düngen', 'Kalken'].includes(orderForm.taetigkeit) && (
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs space-y-2">
+                      <label className="font-bold text-slate-300">Material-Herkunft</label>
+                      <label className="flex items-center gap-2"><input type="radio" name="duenger" value="hof_eigen" checked={orderForm.duengerOption === 'hof_eigen'} onChange={(e) => setOrderForm({ ...orderForm, duengerOption: e.target.value })} /> Hof-eigener Dünger/Kalk</label>
+                      <label className="flex items-center gap-2"><input type="radio" name="duenger" value="lohner_material" checked={orderForm.duengerOption === 'lohner_material'} onChange={(e) => setOrderForm({ ...orderForm, duengerOption: e.target.value })} /> Lohner bringt Material mit (+100 €/ha)</label>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Preis (€) - Optional überschreiben</label>
+                    <input type="number" placeholder={calculateOrderPrice() + " € (Automatisch)"} value={orderForm.manuellerPreis} onChange={(e) => setOrderForm({ ...orderForm, manuellerPreis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Zusatzinfos / Notizen</label>
+                    <textarea rows="2" placeholder="z.B. Stroh bitte ablegen..." value={orderForm.beschreibung} onChange={(e) => setOrderForm({ ...orderForm, beschreibung: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5"></textarea>
+                  </div>
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl flex justify-between items-center text-xs">
+                    <span>Finaler Preis (100er gerundet):</span>
+                    <span className="text-lg font-black text-emerald-400">{calculateOrderPrice()} €</span>
+                  </div>
+                  <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition">Auftrag veröffentlichen</button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: FAHRZEUG ANBIETEN */}
+          {isVehicleModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Fahrzeug / Maschine anbieten</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  sendAction('fahrzeug', 'create', { id: "VEH-" + Date.now(), name: vehicleForm.name, kategorie: vehicleForm.kategorie, preis: vehicleForm.preis, ersteller: userName });
+                  setIsVehicleModalOpen(false);
+                  setVehicleForm({ name: '', kategorie: 'Trecker', preis: '' });
+                }} className="space-y-3 text-sm">
+                  <input type="text" placeholder="Fahrzeugname (z.B. Fendt 728 Vario)" value={vehicleForm.name} onChange={(e) => setVehicleForm({ ...vehicleForm, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <select value={vehicleForm.kategorie} onChange={(e) => setVehicleForm({ ...vehicleForm, kategorie: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                    {VEHICLE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                  <input type="number" placeholder="Festpreis in €" value={vehicleForm.preis} onChange={(e) => setVehicleForm({ ...vehicleForm, preis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setIsVehicleModalOpen(false)} className="w-1/2 bg-slate-800 p-2.5 rounded-xl text-xs">Abbrechen</button>
+                    <button type="submit" className="w-1/2 bg-emerald-600 text-white p-2.5 rounded-xl text-xs">Erstellen</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: WARE ANBIETEN */}
+          {isGoodModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Produkt / Ware anbieten</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  sendAction('ware', 'create', { id: "GOOD-" + Date.now(), produkt: goodForm.produkt, menge: goodForm.menge, einheit: goodForm.einheit, preis: goodForm.preis, ersteller: userName });
+                  setIsGoodModalOpen(false);
+                  setGoodForm({ produkt: '', menge: '', einheit: 'Liter (L)', preis: '' });
+                }} className="space-y-3 text-sm">
+                  <input type="text" placeholder="Produkt (z.B. Weizen, Zucker, Paletten)" value={goodForm.produkt} onChange={(e) => setGoodForm({ ...goodForm, produkt: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <input type="number" placeholder="Verfügbare Menge (z.B. 100000 oder 10)" value={goodForm.menge} onChange={(e) => setGoodForm({ ...goodForm, menge: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <select value={goodForm.einheit} onChange={(e) => setGoodForm({ ...goodForm, einheit: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                    <option value="Liter (L)">Liter (L)</option>
+                    <option value="Palette">Palette</option>
+                    <option value="Ballen">Ballen</option>
+                    <option value="Stück">Stück</option>
+                  </select>
+                  <input type="number" placeholder="Preis in € (pro 1.000L / pro Stk.)" value={goodForm.preis} onChange={(e) => setGoodForm({ ...goodForm, preis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <p className="text-[11px] text-slate-400 italic">Hinweis: Bei Liter gilt der Preis pro 1.000L (z.B. 360 €), bei Paletten/Stück pro einzelner Einheit.</p>
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setIsGoodModalOpen(false)} className="w-1/2 bg-slate-800 p-2.5 rounded-xl text-xs">Abbrechen</button>
+                    <button type="submit" className="w-1/2 bg-emerald-600 text-white p-2.5 rounded-xl text-xs">Veröffentlichen</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* PROFIL MODAL */}
+          {isEditingProfile && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Hofname ändern</h3>
+                <input type="text" value={tempUserName} onChange={(e) => setTempUserName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm" />
+                <div className="flex gap-2">
+                  <button onClick={() => setIsEditingProfile(false)} className="w-1/2 bg-slate-800 p-2 rounded-xl text-xs">Abbrechen</button>
+                  <button onClick={handleSaveProfile} className="w-1/2 bg-emerald-600 p-2 rounded-xl text-xs text-white">Speichern</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
