@@ -16,7 +16,25 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const API_URL = "https://script.google.com/macros/s/AKfycbx3W_J_FqmUeQ7YXl0K-clpAErLBCs80rSPcSg5NxJ9Te4nsnXpgUsbjA3p15PCEq_S/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbweHOdWtkd06vrVAQZBsnE3rTyfZI2ZUBgyyioBR3YOqxWbeYSuTj7RxmF37yIBXqGm/exec";
+
+    const VEHICLE_CATEGORIES = [
+      'Trecker',
+      'Mähdrescher',
+      'Feldhäcksler',
+      'Andere Erntemaschinen',
+      'Radlader',
+      'Teleskoplader',
+      'Gabelstapler',
+      'Anhänger',
+      'Säemaschine',
+      'Dünger',
+      'Grünlandtechnik',
+      'Ballentechnik',
+      'Tierhaltung',
+      'Forstwirtschaft',
+      'Sonstiges'
+    ];
 
     const BASE_RATES = {
       'Pflügen': 450,
@@ -43,6 +61,7 @@
       const [tempUserName, setTempUserName] = useState(userName);
 
       const [activeTab, setActiveTab] = useState('marketplace');
+      const [selectedCategory, setSelectedCategory] = useState('Alle');
       const [auftraege, setAuftraege] = useState([]);
       const [fahrzeuge, setFahrzeuge] = useState([]);
       const [waren, setWaren] = useState([]);
@@ -58,7 +77,7 @@
 
       // Form States
       const [orderForm, setOrderForm] = useState({ feld: 'Feld 1', taetigkeit: 'Pflügen', hektar: '2.5', duengerOption: 'hof_eigen', manuellerPreis: '', beschreibung: '' });
-      const [vehicleForm, setVehicleForm] = useState({ name: '', preis: '' });
+      const [vehicleForm, setVehicleForm] = useState({ name: '', kategorie: 'Trecker', preis: '' });
       const [goodForm, setGoodForm] = useState({ produkt: '', menge: '', einheit: 'Liter (L)', preis: '' });
       const [chatInput, setChatInput] = useState('');
 
@@ -132,7 +151,19 @@
       const myAuftraege = auftraege.filter(c => c.ersteller === userName);
       const myAcceptedAuftraege = auftraege.filter(c => c.auftragnehmer === userName && ['in_bearbeitung', 'erledigt'].includes(c.status));
 
-      // FINANZ-LOGIK: Nur bezahlte Transaktionen verbuchen
+      // Aktive Fahrzeuge (Verkaufte werden im Markt ausgeblendet)
+      const activeFahrzeuge = fahrzeuge.filter(v => v.status !== 'Verkauft');
+      const filteredFahrzeuge = activeFahrzeuge.filter(v => selectedCategory === 'Alle' || v.kategorie === selectedCategory);
+
+      // Aktive Waren (Ausverkaufte/Verkaufte ausblenden)
+      const activeWaren = waren.filter(g => g.status !== 'Verkauft' && Number(g.menge) > 0);
+
+      // BENACHRICHTIGUNGSPUNKTE (BADGES)
+      const vehiclePendingCount = fahrzeuge.filter(v => v.ersteller === userName && v.status === 'Angefragt').length;
+      const goodPendingCount = waren.filter(g => g.ersteller === userName && Number(g.gewünschteMenge) > 0).length;
+      const orderPendingCount = myAuftraege.filter(c => c.status === 'erledigt').length;
+
+      // FINANZ-LOGIK (Verbuchung erst wenn bezahlt / verkauft)
       const paidAuftraegeEarnings = auftraege.filter(c => c.auftragnehmer === userName && c.status === 'bezahlt');
       const paidAuftraegeExpenses = auftraege.filter(c => c.ersteller === userName && c.status === 'bezahlt');
 
@@ -202,17 +233,20 @@
           {/* NAVIGATION TABS */}
           <nav className="bg-slate-900/60 border-b border-slate-800 px-4 overflow-x-auto">
             <div className="max-w-6xl mx-auto flex space-x-2 whitespace-nowrap">
-              <button onClick={() => setActiveTab('marketplace')} className={`py-3 px-4 font-medium text-sm border-b-2 transition ${activeTab === 'marketplace' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
+              <button onClick={() => setActiveTab('marketplace')} className={`py-3 px-4 font-medium text-sm border-b-2 transition relative ${activeTab === 'marketplace' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
                 Auftrags-Angebote ({openAuftraege.length})
+                {orderPendingCount > 0 && <span className="ml-2 w-2 py-0.5 px-1 bg-red-500 rounded-full animate-pulse text-[10px] text-white">!</span>}
               </button>
               <button onClick={() => setActiveTab('active')} className={`py-3 px-4 font-medium text-sm border-b-2 transition ${activeTab === 'active' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
                 Meine Aktiven ({myAcceptedAuftraege.length})
               </button>
-              <button onClick={() => setActiveTab('vehicles')} className={`py-3 px-4 font-medium text-sm border-b-2 transition ${activeTab === 'vehicles' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
+              <button onClick={() => setActiveTab('vehicles')} className={`py-3 px-4 font-medium text-sm border-b-2 transition relative ${activeTab === 'vehicles' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
                 Fahrzeugmarkt
+                {vehiclePendingCount > 0 && <span className="ml-2 w-2 py-0.5 px-1 bg-red-500 rounded-full animate-pulse text-[10px] text-white">!</span>}
               </button>
-              <button onClick={() => setActiveTab('goods')} className={`py-3 px-4 font-medium text-sm border-b-2 transition ${activeTab === 'goods' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
+              <button onClick={() => setActiveTab('goods')} className={`py-3 px-4 font-medium text-sm border-b-2 transition relative ${activeTab === 'goods' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
                 Waren & Produkte
+                {goodPendingCount > 0 && <span className="ml-2 w-2 py-0.5 px-1 bg-red-500 rounded-full animate-pulse text-[10px] text-white">!</span>}
               </button>
               <button onClick={() => setActiveTab('chat')} className={`py-3 px-4 font-medium text-sm border-b-2 transition ${activeTab === 'chat' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
                 Server-Chat
@@ -292,7 +326,7 @@
                               {c.status === 'bezahlt' && 'Bezahlt & Verbucht'}
                             </span>
                             {c.status === 'erledigt' && (
-                              <button onClick={() => sendAction('auftrag', 'updateStatus', { id: c.id, status: 'bezahlt' })} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-bold">
+                              <button onClick={() => sendAction('auftrag', 'updateStatus', { id: c.id, status: 'bezahlt' })} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-bold animate-pulse">
                                 Bezahlen & Buchen
                               </button>
                             )}
@@ -345,47 +379,66 @@
             {/* TAB 3: FAHRZEUGMARKT */}
             {activeTab === 'vehicles' && (
               <div className="space-y-6">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <h2 className="text-lg font-bold">Gebrauchtfahrzeuge & Maschinen</h2>
-                  <button onClick={() => setIsVehicleModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition">
-                    + Fahrzeug anbieten
-                  </button>
+                  <div className="flex items-center gap-3 w-full md:w-auto">
+                    <select 
+                      value={selectedCategory} 
+                      onChange={(e) => setSelectedCategory(e.target.value)} 
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200"
+                    >
+                      <option value="Alle">Alle Kategorien</option>
+                      {VEHICLE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                    <button onClick={() => setIsVehicleModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-4 py-2 rounded-xl transition whitespace-nowrap">
+                      + Fahrzeug anbieten
+                    </button>
+                  </div>
                 </div>
 
-                {fahrzeuge.length === 0 ? (
-                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Aktuell stehen keine Fahrzeuge zum Verkauf.</div>
+                {filteredFahrzeuge.length === 0 ? (
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Keine Fahrzeuge in dieser Kategorie.</div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {fahrzeuge.map((v) => (
+                    {filteredFahrzeuge.map((v) => (
                       <div key={v.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4">
                         <div>
                           <div className="flex justify-between items-start">
-                            <h3 className="font-bold text-lg text-slate-100">{v.name}</h3>
+                            <div>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">{v.kategorie || 'Sonstiges'}</span>
+                              <h3 className="font-bold text-lg text-slate-100 mt-1">{v.name}</h3>
+                            </div>
                             <span className="text-lg font-black text-emerald-400">{v.preis} €</span>
                           </div>
                           <p className="text-xs text-slate-400 mt-2">Verkäufer: <strong className="text-slate-200">{v.ersteller}</strong></p>
                         </div>
 
                         <div className="space-y-2">
-                          <div className="text-xs text-center py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">
-                            Status: <span className="font-bold text-emerald-400">{v.status}</span> {v.kaufer ? `(Käufer: ${v.kaufer})` : ''}
-                          </div>
-
                           {v.ersteller === userName ? (
-                            <div>
-                              {v.status === 'Angefragt' && (
-                                <button onClick={() => sendAction('fahrzeug', 'updateStatus', { id: v.id, status: 'Verkauft' })} className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 rounded-xl transition mb-2">
-                                  Kauf von {v.kaufer} bestätigen
+                            <div className="space-y-2">
+                              {v.status === 'Angefragt' ? (
+                                <button onClick={() => sendAction('fahrzeug', 'updateStatus', { id: v.id, status: 'Verkauft' })} className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 rounded-xl transition animate-pulse">
+                                  Kauf von {v.kaufer} bestätigen & verbuchen
                                 </button>
+                              ) : (
+                                <div className="text-xs text-center py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400">Dein Angebot (Verfügbar)</div>
                               )}
                             </div>
                           ) : (
-                            <button 
-                              onClick={() => sendAction('fahrzeug', 'updateStatus', { id: v.id, status: 'Angefragt', kaufer: userName })}
-                              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-2 rounded-xl transition"
-                            >
-                              Kaufinteresse / Anfragen
-                            </button>
+                            <div>
+                              {v.status === 'Angefragt' && v.kaufer === userName ? (
+                                <div className="text-xs text-center py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold">
+                                  Wartet auf Verkäufer...
+                                </div>
+                              ) : (
+                                <button 
+                                  onClick={() => sendAction('fahrzeug', 'updateStatus', { id: v.id, status: 'Angefragt', kaufer: userName })}
+                                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-2 rounded-xl transition"
+                                >
+                                  Kaufinteresse / Anfragen
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -405,11 +458,11 @@
                   </button>
                 </div>
 
-                {waren.length === 0 ? (
+                {activeWaren.length === 0 ? (
                   <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Aktuell werden keine Waren angeboten.</div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {waren.map((g) => (
+                    {activeWaren.map((g) => (
                       <div key={g.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
                         <div className="flex justify-between items-start">
                           <div>
@@ -424,18 +477,20 @@
 
                         <div className="text-xs text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
                           <p>Verkäufer: <strong className="text-slate-200">{g.ersteller}</strong></p>
-                          {g.gewünschteMenge > 0 && <p className="text-amber-400 font-bold">Kaufanfrage von {g.kaufer}: {g.gewünschteMenge} {g.einheit}</p>}
+                          {Number(g.gewünschteMenge) > 0 && <p className="text-amber-400 font-bold">Kaufanfrage von {g.kaufer}: {g.gewünschteMenge} {g.einheit}</p>}
                         </div>
 
                         {g.ersteller === userName ? (
                           <div>
-                            {g.gewünschteMenge > 0 && (
+                            {Number(g.gewünschteMenge) > 0 ? (
                               <button 
                                 onClick={() => sendAction('ware', 'updateStatus', { id: g.id, status: 'Verkauft', menge: Number(g.menge) - Number(g.gewünschteMenge), gewünschteMenge: 0 })}
-                                className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium py-2 rounded-xl transition"
+                                className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 rounded-xl transition animate-pulse"
                               >
                                 Verkauf an {g.kaufer} ({g.gewünschteMenge} {g.einheit}) bestätigen
                               </button>
+                            ) : (
+                              <div className="text-xs text-center py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400">Dein Warenangebot</div>
                             )}
                           </div>
                         ) : (
@@ -550,10 +605,22 @@
                         <span className="font-bold text-emerald-400">+{v.preis} €</span>
                       </div>
                     ))}
+                    {boughtVehiclesExpenses.map(v => (
+                      <div key={v.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Ausgabe: Fahrzeug "{v.name}" von {v.ersteller}</span>
+                        <span className="font-bold text-red-400">-{v.preis} €</span>
+                      </div>
+                    ))}
                     {soldGoodsEarnings.map(g => (
                       <div key={g.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
                         <span>Einnahme: Ware "{g.produkt}" an {g.kaufer}</span>
                         <span className="font-bold text-emerald-400">+{g.preis} €</span>
+                      </div>
+                    ))}
+                    {boughtGoodsExpenses.map(g => (
+                      <div key={g.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Ausgabe: Ware "{g.produkt}" von {g.ersteller}</span>
+                        <span className="font-bold text-red-400">-{g.preis} €</span>
                       </div>
                     ))}
                   </div>
@@ -633,14 +700,17 @@
           {isVehicleModalOpen && (
             <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
               <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
-                <h3 className="font-bold text-lg">Fahrzeug zum Verkauf anbieten</h3>
+                <h3 className="font-bold text-lg">Fahrzeug / Maschine anbieten</h3>
                 <form onSubmit={(e) => {
                   e.preventDefault();
-                  sendAction('fahrzeug', 'create', { id: "VEH-" + Date.now(), name: vehicleForm.name, preis: vehicleForm.preis, ersteller: userName });
+                  sendAction('fahrzeug', 'create', { id: "VEH-" + Date.now(), name: vehicleForm.name, kategorie: vehicleForm.kategorie, preis: vehicleForm.preis, ersteller: userName });
                   setIsVehicleModalOpen(false);
-                  setVehicleForm({ name: '', preis: '' });
+                  setVehicleForm({ name: '', kategorie: 'Trecker', preis: '' });
                 }} className="space-y-3 text-sm">
                   <input type="text" placeholder="Fahrzeugname (z.B. Fendt 728 Vario)" value={vehicleForm.name} onChange={(e) => setVehicleForm({ ...vehicleForm, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <select value={vehicleForm.kategorie} onChange={(e) => setVehicleForm({ ...vehicleForm, kategorie: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                    {VEHICLE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
                   <input type="number" placeholder="Festpreis in €" value={vehicleForm.preis} onChange={(e) => setVehicleForm({ ...vehicleForm, preis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
                   <div className="flex gap-2 pt-2">
                     <button type="button" onClick={() => setIsVehicleModalOpen(false)} className="w-1/2 bg-slate-800 p-2.5 rounded-xl text-xs">Abbrechen</button>
