@@ -16,7 +16,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const API_URL = "https://script.google.com/macros/s/AKfycbyfPFzCDjqgYatIhMBxeKZMeNtIkaRbaQjbeXAaFgdgCJLLy3ZtQ7KmCNdoTRdlqhNX/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbzXWpj3NOiFsZHkE-z69AIbkgT3z7R8Gk-IXi7J7enFiX_7r7IqLro_ehCGQzD-OaQ/exec";
 
     const VEHICLE_CATEGORIES = [
       'Trecker',
@@ -170,7 +170,7 @@
       const goodPendingCount = waren.filter(g => g.ersteller === userName && Number(g.gewünschteMenge) > 0).length;
       const orderPendingCount = myAuftraege.filter(c => c.status === 'erledigt').length;
 
-      // FINANZ-LOGIK (mit Reset-Filter)
+      // FINANZ-LOGIK
       const paidAuftraegeEarnings = auftraege.filter(c => c.auftragnehmer === userName && (c.status || '').toString().trim().toLowerCase() === 'bezahlt' && isAfterReset(c.id));
       const paidAuftraegeExpenses = auftraege.filter(c => c.ersteller === userName && (c.status || '').toString().trim().toLowerCase() === 'bezahlt' && isAfterReset(c.id));
 
@@ -422,7 +422,20 @@
                                   Kauf von {v.kaufer} bestätigen & verbuchen
                                 </button>
                               ) : (
-                                <div className="text-xs text-center py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400">Dein Angebot (Verfügbar)</div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-full text-xs text-center py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400">Dein Angebot (Verfügbar)</div>
+                                  <button 
+                                    onClick={() => {
+                                      if (window.confirm(`Möchtest du das Inserat "${v.name}" wirklich löschen?`)) {
+                                        sendAction('fahrzeug', 'delete', { id: v.id });
+                                      }
+                                    }}
+                                    title="Angebot löschen"
+                                    className="bg-slate-800 hover:bg-red-600/50 text-slate-300 px-3 py-2 rounded-xl border border-slate-700 transition text-xs"
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
                               )}
                             </div>
                           ) : (
