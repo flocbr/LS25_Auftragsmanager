@@ -16,7 +16,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const API_URL = "https://script.google.com/macros/s/AKfycbzXWpj3NOiFsZHkE-z69AIbkgT3z7R8Gk-IXi7J7enFiX_7r7IqLro_ehCGQzD-OaQ/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbwKmPNTWWkhsqUu9RlAiocRRNR_SqQcjYBd0HIyzhWL9nzOY6Ehq9uANmgm_3H04fAw/exec";
 
     const VEHICLE_CATEGORIES = [
       'Trecker',
@@ -61,6 +61,7 @@
       const [tempUserName, setTempUserName] = useState(userName);
 
       const [activeTab, setActiveTab] = useState('marketplace');
+      const [vehicleSubTab, setVehicleSubTab] = useState('verkauf'); // 'verkauf' oder 'verleih'
       const [selectedCategory, setSelectedCategory] = useState('Alle');
       const [auftraege, setAuftraege] = useState([]);
       const [fahrzeuge, setFahrzeuge] = useState([]);
@@ -77,7 +78,7 @@
 
       // Form States
       const [orderForm, setOrderForm] = useState({ feld: 'Feld 1', taetigkeit: 'Pflügen', hektar: '2.5', duengerOption: 'hof_eigen', manuellerPreis: '', beschreibung: '' });
-      const [vehicleForm, setVehicleForm] = useState({ name: '', kategorie: 'Trecker', preis: '' });
+      const [vehicleForm, setVehicleForm] = useState({ name: '', kategorie: 'Trecker', preis: '', angebotstyp: 'verkauf', ps: '', specs: '' });
       const [goodForm, setGoodForm] = useState({ produkt: '', menge: '', einheit: 'Liter (L)', preis: '' });
 
       const fetchData = async () => {
@@ -160,7 +161,14 @@
       const myAuftraege = auftraege.filter(c => c.ersteller === userName);
       const myAcceptedAuftraege = auftraege.filter(c => c.auftragnehmer === userName && ['in_bearbeitung', 'erledigt'].includes(c.status));
 
-      const activeFahrzeuge = fahrzeuge.filter(v => (v.status || '').toLowerCase() !== 'verkauft');
+      // Fahrzeugmarkt Filter nach Untertab (verkauf vs verleih)
+      const currentVehiclesList = fahrzeuge.filter(v => {
+        const type = (v.angebotstyp || 'verkauf').toLowerCase();
+        if (vehicleSubTab === 'verleih') return type === 'verleih';
+        return type === 'verkauf' || type === '';
+      });
+
+      const activeFahrzeuge = currentVehiclesList.filter(v => (v.status || '').toLowerCase() !== 'verkauft');
       const filteredFahrzeuge = activeFahrzeuge.filter(v => selectedCategory === 'Alle' || v.kategorie === selectedCategory);
 
       const activeWaren = waren.filter(g => (g.status || '').toLowerCase() !== 'verkauft' && Number(g.menge) > 0);
@@ -245,7 +253,7 @@
                 Meine Aktiven ({myAcceptedAuftraege.length})
               </button>
               <button onClick={() => setActiveTab('vehicles')} className={`py-3 px-4 font-medium text-sm border-b-2 transition relative ${activeTab === 'vehicles' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
-                Fahrzeugmarkt
+                Fahrzeugmarkt & Verleih
                 {vehiclePendingCount > 0 && <span className="ml-2 w-2 py-0.5 px-1 bg-red-500 rounded-full animate-pulse text-[10px] text-white">!</span>}
               </button>
               <button onClick={() => setActiveTab('goods')} className={`py-3 px-4 font-medium text-sm border-b-2 transition relative ${activeTab === 'goods' ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5' : 'border-transparent text-slate-400'}`}>
@@ -377,11 +385,26 @@
               </div>
             )}
 
-            {/* TAB 3: FAHRZEUGMARKT */}
+            {/* TAB 3: FAHRZEUGMARKT & VERLEIH */}
             {activeTab === 'vehicles' && (
               <div className="space-y-6">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <h2 className="text-lg font-bold">Gebrauchtfahrzeuge & Maschinen</h2>
+                {/* Unter-Navigation für Fahrzeugmarkt */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-4">
+                  <div className="flex items-center space-x-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                    <button 
+                      onClick={() => setVehicleSubTab('verkauf')} 
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition ${vehicleSubTab === 'verkauf' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      🏷️ Gebrauchtwagenmarkt
+                    </button>
+                    <button 
+                      onClick={() => setVehicleSubTab('verleih')} 
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition ${vehicleSubTab === 'verleih' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      🚜 Mietpark & Verleih
+                    </button>
+                  </div>
+
                   <div className="flex items-center gap-3 w-full md:w-auto">
                     <select 
                       value={selectedCategory} 
@@ -398,7 +421,9 @@
                 </div>
 
                 {filteredFahrzeuge.length === 0 ? (
-                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Keine Fahrzeuge in dieser Kategorie.</div>
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">
+                    {vehicleSubTab === 'verkauf' ? 'Keine Fahrzeuge im Gebrauchtmarkt.' : 'Aktuell werden keine Maschinen im Mietpark verliehen.'}
+                  </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {filteredFahrzeuge.map((v) => (
@@ -406,31 +431,39 @@
                         <div>
                           <div className="flex justify-between items-start">
                             <div>
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">{v.kategorie || 'Sonstiges'}</span>
-                              <h3 className="font-bold text-lg text-slate-100 mt-1">{v.name}</h3>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">{v.kategorie || 'Sonstiges'}</span>
+                                {v.ps && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">{v.ps} PS</span>}
+                              </div>
+                              <h3 className="font-bold text-lg text-slate-100">{v.name}</h3>
                             </div>
-                            <span className="text-lg font-black text-emerald-400">{v.preis} €</span>
+                            <div className="text-right">
+                              <span className="text-lg font-black text-emerald-400">{v.preis} €</span>
+                              {vehicleSubTab === 'verleih' && <p className="text-[10px] text-slate-400">pro Tag/Einsatz</p>}
+                            </div>
                           </div>
-                          <p className="text-xs text-slate-400 mt-2">Verkäufer: <strong className="text-slate-200">{v.ersteller}</strong></p>
+                          
+                          {v.specs && <p className="text-xs text-slate-300 mt-2 bg-slate-950 p-2 rounded-lg border border-slate-800/80"><strong>Infos:</strong> {v.specs}</p>}
+                          <p className="text-xs text-slate-400 mt-2">Anbieter: <strong className="text-slate-200">{v.ersteller}</strong></p>
                         </div>
 
                         <div className="space-y-2">
                           {v.ersteller === userName ? (
                             <div className="space-y-2">
-                              {(v.status || '').toLowerCase() === 'angefragt' ? (
+                              {vehicleSubTab === 'verkauf' && (v.status || '').toLowerCase() === 'angefragt' ? (
                                 <button onClick={() => sendAction('fahrzeug', 'updateStatus', { id: v.id, status: 'Verkauft' })} className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 rounded-xl transition animate-pulse">
                                   Kauf von {v.kaufer} bestätigen & verbuchen
                                 </button>
                               ) : (
                                 <div className="flex items-center gap-2">
-                                  <div className="w-full text-xs text-center py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400">Dein Angebot (Verfügbar)</div>
+                                  <div className="w-full text-xs text-center py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400">Dein Inserat (Verfügbar)</div>
                                   <button 
                                     onClick={() => {
                                       if (window.confirm(`Möchtest du das Inserat "${v.name}" wirklich löschen?`)) {
                                         sendAction('fahrzeug', 'delete', { id: v.id });
                                       }
                                     }}
-                                    title="Angebot löschen"
+                                    title="Inserat löschen"
                                     className="bg-slate-800 hover:bg-red-600/50 text-slate-300 px-3 py-2 rounded-xl border border-slate-700 transition text-xs"
                                   >
                                     🗑️
@@ -440,16 +473,16 @@
                             </div>
                           ) : (
                             <div>
-                              {(v.status || '').toLowerCase() === 'angefragt' && v.kaufer === userName ? (
+                              {vehicleSubTab === 'verkauf' && (v.status || '').toLowerCase() === 'angefragt' && v.kaufer === userName ? (
                                 <div className="text-xs text-center py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold">
                                   Wartet auf Verkäufer...
                                 </div>
                               ) : (
                                 <button 
-                                  onClick={() => sendAction('fahrzeug', 'updateStatus', { id: v.id, status: 'Angefragt', kaufer: userName })}
+                                  onClick={() => sendAction('fahrzeug', 'updateStatus', { id: v.id, status: vehicleSubTab === 'verkauf' ? 'Angefragt' : 'verfügbar', kaufer: userName })}
                                   className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-2 rounded-xl transition"
                                 >
-                                  Kaufinteresse / Anfragen
+                                  {vehicleSubTab === 'verkauf' ? 'Kaufinteresse / Anfragen' : 'Mietanfrage senden'}
                                 </button>
                               )}
                             </div>
@@ -708,22 +741,42 @@
             </div>
           )}
 
-          {/* MODAL: FAHRZEUG ANBIETEN */}
+          {/* MODAL: FAHRZEUG / VERLEIH ANBIETEN */}
           {isVehicleModalOpen && (
             <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
               <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
                 <h3 className="font-bold text-lg">Fahrzeug / Maschine anbieten</h3>
                 <form onSubmit={(e) => {
                   e.preventDefault();
-                  sendAction('fahrzeug', 'create', { id: "VEH-" + Date.now(), name: vehicleForm.name, kategorie: vehicleForm.kategorie, preis: vehicleForm.preis, ersteller: userName });
+                  sendAction('fahrzeug', 'create', { 
+                    id: "VEH-" + Date.now(), 
+                    name: vehicleForm.name, 
+                    kategorie: vehicleForm.kategorie, 
+                    preis: vehicleForm.preis, 
+                    ersteller: userName,
+                    angebotstyp: vehicleForm.angebotstyp,
+                    ps: vehicleForm.ps,
+                    specs: vehicleForm.specs
+                  });
                   setIsVehicleModalOpen(false);
-                  setVehicleForm({ name: '', kategorie: 'Trecker', preis: '' });
+                  setVehicleForm({ name: '', kategorie: 'Trecker', preis: '', angebotstyp: 'verkauf', ps: '', specs: '' });
                 }} className="space-y-3 text-sm">
-                  <input type="text" placeholder="Fahrzeugname (z.B. Fendt 728 Vario)" value={vehicleForm.name} onChange={(e) => setVehicleForm({ ...vehicleForm, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
-                  <select value={vehicleForm.kategorie} onChange={(e) => setVehicleForm({ ...vehicleForm, kategorie: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Art des Angebots</label>
+                    <select value={vehicleForm.angebotstyp} onChange={(e) => setVehicleForm({ ...vehicleForm, angebotstyp: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs">
+                      <option value="verkauf">Gebrauchtwagenmarkt (Verkauf)</option>
+                      <option value="verleih">Mietpark & Verleih</option>
+                    </select>
+                  </div>
+                  <input type="text" placeholder="Fahrzeugname (z.B. Fendt 728 Vario)" value={vehicleForm.name} onChange={(e) => setVehicleForm({ ...vehicleForm, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs" required />
+                  <select value={vehicleForm.kategorie} onChange={(e) => setVehicleForm({ ...vehicleForm, kategorie: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs">
                     {VEHICLE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
-                  <input type="number" placeholder="Festpreis in €" value={vehicleForm.preis} onChange={(e) => setVehicleForm({ ...vehicleForm, preis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="number" placeholder={vehicleForm.angebotstyp === 'verleih' ? "Mietpreis (€ / Tag)" : "Festpreis (€)"} value={vehicleForm.preis} onChange={(e) => setVehicleForm({ ...vehicleForm, preis: e.target.value })} className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs" required />
+                    <input type="number" placeholder="Leistung (PS) opt." value={vehicleForm.ps} onChange={(e) => setVehicleForm({ ...vehicleForm, ps: e.target.value })} className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs" />
+                  </div>
+                  <input type="text" placeholder="Zusatz-Infos / Specs (z.B. 9m Arbeitsbreite, Seilwinde)" value={vehicleForm.specs} onChange={(e) => setVehicleForm({ ...vehicleForm, specs: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs" />
                   <div className="flex gap-2 pt-2">
                     <button type="button" onClick={() => setIsVehicleModalOpen(false)} className="w-1/2 bg-slate-800 p-2.5 rounded-xl text-xs">Abbrechen</button>
                     <button type="submit" className="w-1/2 bg-emerald-600 text-white p-2.5 rounded-xl text-xs">Erstellen</button>
