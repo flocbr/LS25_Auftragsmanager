@@ -16,7 +16,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const API_URL = "https://script.google.com/macros/s/AKfycbyW8rEclDRcIH0hXcu52bULGEuRPWq83Gp_QO0L_DJedNKLgYaQ9nyZnT82MY12Ji4/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbxZWjCR3xpF01UmMHvr9FY7B79VspzxAk2CPAAcZeddG31pdGGHXzxWb8mZXjC_0rm0/exec";
 
     const VEHICLE_CATEGORIES = [
       'Trecker',
@@ -128,6 +128,32 @@
           await fetchData();
         } catch (err) {
           console.error("Aktion fehlgeschlagen:", err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleGenerateAllFields = async () => {
+        if (!window.confirm("Möchtest du jetzt automatisch alle 104 Felder (1-49) und Flächen (50-104) in der Datenbank anlegen?")) return;
+        setLoading(true);
+        try {
+          for (let i = 1; i <= 104; i++) {
+            const prefix = i <= 49 ? "Feld" : "Fläche";
+            await fetch(API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({
+                type: 'feld',
+                action: 'create',
+                data: { id: "FIELD-" + i + "-" + Date.now(), name: `${prefix} ${i}`, hektar: 2.5 }
+              })
+            });
+          }
+          await fetchData();
+          alert("Alle 104 Felder & Flächen wurden erfolgreich generiert!");
+        } catch (err) {
+          console.error("Fehler beim Generieren:", err);
+          alert("Fehler beim Generieren der Felder.");
         } finally {
           setLoading(false);
         }
@@ -341,4 +367,641 @@
                           <div className="flex items-center gap-2">
                             <span className="text-xs px-3 py-1 rounded-full font-medium bg-slate-800 text-slate-300">
                               {c.status === 'offen' && 'Wartet auf Helfer'}
-                              {
+                              {c.status === 'in_bearbeitung' && 'Wird bearbeitet'}
+                              {c.status === 'erledigt' && 'Erledigt (Auszahlung ausstehend)'}
+                              {c.status === 'bezahlt' && 'Bezahlt & Verbucht'}
+                            </span>
+                            {c.status === 'erledigt' && (
+                              <button onClick={() => sendAction('auftrag', 'updateStatus', { id: c.id, status: 'bezahlt' })} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-bold animate-pulse">
+                                Bezahlen & Buchen
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+
+            {/* TAB 2: MEINE AKTIVEN AUFTRÄGE */}
+            {activeTab === 'active' && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-bold mb-2">Von mir angenommene Arbeiten</h2>
+                {myAcceptedAuftraege.length === 0 ? (
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Du hast aktuell keine aktiven Aufträge.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {myAcceptedAuftraege.map((c) => (
+                      <div key={c.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded bg-slate-800 text-emerald-400">{c.feld}</span>
+                            <h3 className="font-bold text-lg mt-2">{c.taetigkeit}</h3>
+                          </div>
+                          <span className="text-xl font-black text-emerald-400">{c.preis} €</span>
+                        </div>
+                        {c.beschreibung && <p className="text-xs italic text-slate-400">"{c.beschreibung}"</p>}
+                        
+                        <div>
+                          {c.status === 'in_bearbeitung' ? (
+                            <button onClick={() => sendAction('auftrag', 'updateStatus', { id: c.id, status: 'erledigt' })} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl text-sm transition">
+                              Als erledigt markieren
+                            </button>
+                          ) : (
+                            <div className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs text-center py-2.5 rounded-xl font-medium">
+                              Erledigt! Wartet auf Auszahlung vom Auftraggeber.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: FAHRZEUGMARKT & VERLEIH */}
+            {activeTab === 'vehicles' && (
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-4">
+                  <div className="flex items-center space-x-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                    <button 
+                      onClick={() => setVehicleSubTab('verkauf')} 
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition ${vehicleSubTab === 'verkauf' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      🏷️ Gebrauchtwagenmarkt
+                    </button>
+                    <button 
+                      onClick={() => setVehicleSubTab('verleih')} 
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition ${vehicleSubTab === 'verleih' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      🚜 Mietpark & Verleih
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3 w-full md:w-auto">
+                    <select 
+                      value={selectedCategory} 
+                      onChange={(e) => setSelectedCategory(e.target.value)} 
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200"
+                    >
+                      <option value="Alle">Alle Kategorien</option>
+                      {VEHICLE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                    <button onClick={() => setIsVehicleModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-4 py-2 rounded-xl transition whitespace-nowrap">
+                      + Fahrzeug anbieten
+                    </button>
+                  </div>
+                </div>
+
+                {filteredFahrzeuge.length === 0 ? (
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">
+                    {vehicleSubTab === 'verkauf' ? 'Keine Fahrzeuge im Gebrauchtmarkt.' : 'Aktuell werden keine Maschinen im Mietpark verliehen.'}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {filteredFahrzeuge.map((v) => (
+                      <div key={v.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                        <div>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">{v.kategorie || 'Sonstiges'}</span>
+                                {v.ps && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">{v.ps} PS</span>}
+                              </div>
+                              <h3 className="font-bold text-lg text-slate-100">{v.name}</h3>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-lg font-black text-emerald-400">{v.preis} €</span>
+                              {vehicleSubTab === 'verleih' && <p className="text-[10px] text-slate-400">pro Tag/Einsatz</p>}
+                            </div>
+                          </div>
+                          
+                          {v.specs && <p className="text-xs text-slate-300 mt-2 bg-slate-950 p-2 rounded-lg border border-slate-800/80"><strong>Infos:</strong> {v.specs}</p>}
+                          <p className="text-xs text-slate-400 mt-2">Anbieter: <strong className="text-slate-200">{v.ersteller}</strong></p>
+                        </div>
+
+                        <div className="space-y-2">
+                          {v.ersteller === userName ? (
+                            <div className="space-y-2">
+                              {vehicleSubTab === 'verkauf' && (v.status || '').toLowerCase() === 'angefragt' ? (
+                                <button onClick={() => sendAction('fahrzeug', 'updateStatus', { id: v.id, status: 'Verkauft' })} className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 rounded-xl transition animate-pulse">
+                                  Kauf von {v.kaufer} bestätigen & verbuchen
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-full text-xs text-center py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400">Dein Inserat (Verfügbar)</div>
+                                  <button 
+                                    onClick={() => {
+                                      if (window.confirm(`Möchtest du das Inserat "${v.name}" wirklich löschen?`)) {
+                                        sendAction('fahrzeug', 'delete', { id: v.id });
+                                      }
+                                    }}
+                                    title="Inserat löschen"
+                                    className="bg-slate-800 hover:bg-red-600/50 text-slate-300 px-3 py-2 rounded-xl border border-slate-700 transition text-xs"
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              {vehicleSubTab === 'verkauf' && (v.status || '').toLowerCase() === 'angefragt' && v.kaufer === userName ? (
+                                <div className="text-xs text-center py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold">
+                                  Wartet auf Verkäufer...
+                                </div>
+                              ) : (
+                                <button 
+                                  onClick={() => sendAction('fahrzeug', 'updateStatus', { id: v.id, status: vehicleSubTab === 'verkauf' ? 'Angefragt' : 'verfügbar', kaufer: userName })}
+                                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-2 rounded-xl transition"
+                                >
+                                  {vehicleSubTab === 'verkauf' ? 'Kaufinteresse / Anfragen' : 'Mietanfrage senden'}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 4: WAREN & PRODUKTE */}
+            {activeTab === 'goods' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-bold">Waren- & Produktmarkt</h2>
+                  <button onClick={() => setIsGoodModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition">
+                    + Ware anbieten
+                  </button>
+                </div>
+
+                {activeWaren.length === 0 ? (
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">Aktuell werden keine Waren angeboten.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {activeWaren.map((g) => {
+                      const requestedQty = Number(g.gewünschteMenge) || 0;
+                      const hasRequest = requestedQty > 0;
+                      const remainingAfterSale = Number(g.menge) - requestedQty;
+                      const isLiter = g.einheit && g.einheit.includes('Liter');
+
+                      const tempSoldItem = { ...g, menge: requestedQty };
+                      const calculatedPrice = calculateGoodTotalPrice(tempSoldItem);
+
+                      return (
+                        <div key={g.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{g.einheit}</span>
+                              <h3 className="font-bold text-lg mt-2">{g.produkt}</h3>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xl font-black text-emerald-400">
+                                {g.preis} € <span className="text-[10px] text-slate-400 font-normal">{isLiter ? 'pro 1.000L' : 'pro Stk.'}</span>
+                              </span>
+                              <p className="text-[10px] text-slate-400 font-bold">Verfügbar: {g.menge} {isLiter ? 'L' : ''}</p>
+                            </div>
+                          </div>
+
+                          <div className="text-xs text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                            <p>Verkäufer: <strong className="text-slate-200">{g.ersteller}</strong></p>
+                            {hasRequest && (
+                              <p className="text-amber-400 font-bold mt-1">
+                                📩 Anfrage von {g.kaufer}: {requestedQty} {isLiter ? 'L' : ''} (Gesamt: {calculatedPrice} €)
+                              </p>
+                            )}
+                          </div>
+
+                          {g.ersteller === userName ? (
+                            <div>
+                              {hasRequest ? (
+                                <button 
+                                  onClick={() => {
+                                    const isFullSale = remainingAfterSale <= 0;
+                                    sendAction('ware', 'updateStatus', { 
+                                      id: g.id, 
+                                      status: isFullSale ? 'Verkauft' : 'verfügbar', 
+                                      menge: remainingAfterSale, 
+                                      gewünschteMenge: 0,
+                                      kaufer: g.kaufer,
+                                      soldQty: isFullSale ? 0 : requestedQty
+                                    });
+                                  }}
+                                  className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2.5 rounded-xl transition animate-pulse"
+                                >
+                                  Verkauf an {g.kaufer} ({requestedQty} für {calculatedPrice} €) akzeptieren
+                                </button>
+                              ) : (
+                                <div className="text-xs text-center py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400">Dein Angebot (Verfügbar)</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              {hasRequest && g.kaufer === userName ? (
+                                <div className="text-xs text-center py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold">
+                                  Wartet auf Bestätigung von {g.ersteller}... ({requestedQty})
+                                </div>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <input 
+                                    type="number" 
+                                    placeholder={isLiter ? "Menge in L (z.B. 5000)" : "Menge (z.B. 2)"}
+                                    id={`buy-qty-${g.id}`}
+                                    className="w-1/2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100" 
+                                  />
+                                  <button 
+                                    onClick={() => {
+                                      const qty = parseFloat(document.getElementById(`buy-qty-${g.id}`).value);
+                                      if (!qty || qty <= 0 || qty > Number(g.menge)) return alert("Bitte eine gültige Menge eingeben (maximal " + g.menge + ")!");
+                                      sendAction('ware', 'updateStatus', { id: g.id, gewünschteMenge: qty, kaufer: userName });
+                                    }}
+                                    className="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium py-2 rounded-xl transition"
+                                  >
+                                    Teilkauf Anfragen
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 5: STATISTIKEN & FINANZEN */}
+            {activeTab === 'finance' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-bold">Statistiken & Finanzen</h2>
+                  <button onClick={handleResetFinance} className="bg-slate-800 hover:bg-red-900/50 text-slate-300 text-xs px-3 py-1.5 rounded-xl border border-slate-700 transition">
+                    🔄 Statistiken zurücksetzen
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                    <span className="text-xs uppercase text-slate-400">Einnahmen (Aufträge & Handel)</span>
+                    <div className="text-2xl font-black text-emerald-400 mt-1">+{totalEarnings} €</div>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                    <span className="text-xs uppercase text-slate-400">Ausgaben</span>
+                    <div className="text-2xl font-black text-red-400 mt-1">-{totalExpenses} €</div>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                    <span className="text-xs uppercase text-slate-400">Netto-Differenz</span>
+                    <div className={`text-2xl font-black mt-1 ${netBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {netBalance >= 0 ? `+${netBalance}` : netBalance} €
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                  <h3 className="font-bold text-md border-b border-slate-800 pb-2">Verbuchte Transaktionen</h3>
+                  
+                  <div className="space-y-2 text-xs">
+                    {paidAuftraegeEarnings.map(c => (
+                      <div key={c.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Einnahme: Auftrag "{c.taetigkeit}" ({c.feld})</span>
+                        <span className="font-bold text-emerald-400">+{c.preis} €</span>
+                      </div>
+                    ))}
+                    {paidAuftraegeExpenses.map(c => (
+                      <div key={c.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Ausgabe: Auftrag "{c.taetigkeit}" ({c.feld}) an {c.auftragnehmer}</span>
+                        <span className="font-bold text-red-400">-{c.preis} €</span>
+                      </div>
+                    ))}
+                    {soldVehiclesEarnings.map(v => (
+                      <div key={v.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Einnahme: Fahrzeug "{v.name}" an {v.kaufer}</span>
+                        <span className="font-bold text-emerald-400">+{v.preis} €</span>
+                      </div>
+                    ))}
+                    {boughtVehiclesExpenses.map(v => (
+                      <div key={v.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Ausgabe: Fahrzeug "{v.name}" von {v.ersteller}</span>
+                        <span className="font-bold text-red-400">-{v.preis} €</span>
+                      </div>
+                    ))}
+                    {soldGoodsEarnings.map(g => (
+                      <div key={g.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Einnahme: Ware "{g.produkt}" ({g.menge} {g.einheit}) an {g.kaufer}</span>
+                        <span className="font-bold text-emerald-400">+{calculateGoodTotalPrice(g)} €</span>
+                      </div>
+                    ))}
+                    {boughtGoodsExpenses.map(g => (
+                      <div key={g.id} className="flex justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
+                        <span>Ausgabe: Ware "{g.produkt}" ({g.menge} {g.einheit}) von {g.ersteller}</span>
+                        <span className="font-bold text-red-400">-{calculateGoodTotalPrice(g)} €</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 6: FELDER & DATENBANK */}
+            {activeTab === 'fields' && (
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold">Felder & Flächen Datenbank</h2>
+                    <p className="text-xs text-slate-400">Verwalte hier deine Felder (1-49) und Flächen (50-104).</p>
+                  </div>
+                  <button 
+                    onClick={handleGenerateAllFields}
+                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-lg transition"
+                  >
+                    🤖 Alle 104 Felder/Flächen automatisch anlegen
+                  </button>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-lg">
+                  <h3 className="font-bold text-sm mb-3">Einzelnes Feld / Fläche hinzufügen</h3>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!fieldForm.name || !fieldForm.hektar) return alert("Bitte Name und Hektar eingeben!");
+                    sendAction('feld', 'create', {
+                      id: "FIELD-" + Date.now(),
+                      name: fieldForm.name,
+                      hektar: parseFloat(fieldForm.hektar)
+                    });
+                    setFieldForm({ name: '', hektar: '' });
+                  }} className="space-y-3 text-sm">
+                    <input 
+                      type="text" 
+                      placeholder="Bezeichnung (z.B. Feld 1 oder Fläche 50)" 
+                      value={fieldForm.name} 
+                      onChange={(e) => setFieldForm({ ...fieldForm, name: e.target.value })} 
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100" 
+                      required 
+                    />
+                    <input 
+                      type="number" 
+                      step="0.1" 
+                      placeholder="Größe in Hektar (z.B. 3.5)" 
+                      value={fieldForm.hektar} 
+                      onChange={(e) => setFieldForm({ ...fieldForm, hektar: e.target.value })} 
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100" 
+                      required 
+                    />
+                    <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-xl transition text-xs">
+                      + In Datenbank speichern
+                    </button>
+                  </form>
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="font-bold text-sm">Vorhandene Einträge ({felder.length})</h3>
+                  {felder.length === 0 ? (
+                    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 text-center text-slate-400 text-xs">Noch keine Felder hinterlegt. Nutze den blauen Button oben, um alle 104 automatisch zu generieren!</div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {felder.map((f) => (
+                        <div key={f.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex justify-between items-center">
+                          <div>
+                            <h4 className="font-bold text-slate-100">{f.name}</h4>
+                            <p className="text-xs text-emerald-400 font-bold mt-0.5">{f.hektar} ha</p>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              if (window.confirm(`Möchtest du "${f.name}" wirklich löschen?`)) {
+                                sendAction('feld', 'delete', { id: f.id });
+                              }
+                            }}
+                            title="Löschen"
+                            className="bg-slate-800 hover:bg-red-600/50 text-slate-300 p-2 rounded-xl border border-slate-700 transition text-xs"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+          </main>
+
+          {/* MODAL: AUFTRAG ERSTELLEN */}
+          {isOrderModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                  <h3 className="font-bold text-lg">Neuen Auftrag erstellen</h3>
+                  <button onClick={() => setIsOrderModalOpen(false)} className="text-slate-400">✕</button>
+                </div>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  sendAction('auftrag', 'create', {
+                    id: "ORDER-" + Date.now(),
+                    feld: orderForm.feld || 'Unbekanntes Feld',
+                    taetigkeit: orderForm.taetigkeit,
+                    hektar: ['Logistik & Transport', 'Maschinenverleih', 'Sonstiges'].includes(orderForm.taetigkeit) ? 0 : (parseFloat(orderForm.hektar) || 0),
+                    preis: calculateOrderPrice(),
+                    duengerOption: ['Düngen', 'Kalken'].includes(orderForm.taetigkeit) ? orderForm.duengerOption : '-',
+                    ersteller: userName,
+                    beschreibung: orderForm.beschreibung
+                  });
+                  setIsOrderModalOpen(false);
+                }} className="space-y-4 text-sm">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Feld / Fläche aus Datenbank auswählen</label>
+                    <select 
+                      value={orderForm.istManuell ? 'MANUELL' : orderForm.feld} 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'MANUELL') {
+                          setOrderForm({ ...orderForm, istManuell: true, feld: 'Manuelles Feld' });
+                        } else {
+                          const matchedField = felder.find(f => f.name === val);
+                          setOrderForm({ 
+                            ...orderForm, 
+                            istManuell: false, 
+                            feld: val, 
+                            hektar: matchedField ? matchedField.hektar : orderForm.hektar 
+                          });
+                        }
+                      }} 
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs"
+                    >
+                      <option value="Kein Feld / Logistik">Kein Feld / Logistik</option>
+                      {felder.map(f => <option key={f.id} value={f.name}>{f.name} ({f.hektar} ha)</option>)}
+                      <option value="MANUELL">✏️ Manuelle Hektar-Eingabe...</option>
+                    </select>
+                  </div>
+
+                  {orderForm.istManuell && (
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Eigener Name</label>
+                      <input 
+                        type="text" 
+                        placeholder="z.B. Neuer Schlag / Zusatzfläche" 
+                        value={orderForm.feld === 'Manuelles Feld' ? '' : orderForm.feld} 
+                        onChange={(e) => setOrderForm({ ...orderForm, feld: e.target.value })} 
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs" 
+                        required 
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Tätigkeit</label>
+                    <select value={orderForm.taetigkeit} onChange={(e) => setOrderForm({ ...orderForm, taetigkeit: e.target.value, manuellerPreis: '' })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs">
+                      {Object.keys(BASE_RATES).map((rate) => <option key={rate} value={rate}>{rate} {BASE_RATES[rate] > 0 ? `(${BASE_RATES[rate]} €/ha)` : ''}</option>)}
+                    </select>
+                  </div>
+
+                  {!['Logistik & Transport', 'Maschinenverleih', 'Sonstiges'].includes(orderForm.taetigkeit) && (
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Fläche (ha)</label>
+                      <input 
+                        type="number" 
+                        step="0.1" 
+                        value={orderForm.hektar} 
+                        onChange={(e) => setOrderForm({ ...orderForm, hektar: e.target.value })} 
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs" 
+                        disabled={!orderForm.istManuell && felder.some(f => f.name === orderForm.feld)}
+                      />
+                      {!orderForm.istManuell && felder.some(f => f.name === orderForm.feld) && (
+                        <p className="text-[10px] text-slate-400 mt-1">Automatisch aus Feldbank übernommen.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {['Düngen', 'Kalken'].includes(orderForm.taetigkeit) && (
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs space-y-2">
+                      <label className="font-bold text-slate-300">Material-Herkunft</label>
+                      <label className="flex items-center gap-2"><input type="radio" name="duenger" value="hof_eigen" checked={orderForm.duengerOption === 'hof_eigen'} onChange={(e) => setOrderForm({ ...orderForm, duengerOption: e.target.value })} /> Hof-eigener Dünger/Kalk</label>
+                      <label className="flex items-center gap-2"><input type="radio" name="duenger" value="lohner_material" checked={orderForm.duengerOption === 'lohner_material'} onChange={(e) => setOrderForm({ ...orderForm, duengerOption: e.target.value })} /> Lohner bringt Material mit (+100 €/ha)</label>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Preis (€) - Optional überschreiben</label>
+                    <input type="number" placeholder={calculateOrderPrice() + " € (Automatisch)"} value={orderForm.manuellerPreis} onChange={(e) => setOrderForm({ ...orderForm, manuellerPreis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Zusatzinfos / Notizen</label>
+                    <textarea rows="2" placeholder="z.B. Stroh bitte ablegen..." value={orderForm.beschreibung} onChange={(e) => setOrderForm({ ...orderForm, beschreibung: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs"></textarea>
+                  </div>
+
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl flex justify-between items-center text-xs">
+                    <span>Finaler Preis (100er gerundet):</span>
+                    <span className="text-lg font-black text-emerald-400">{calculateOrderPrice()} €</span>
+                  </div>
+
+                  <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition text-xs">Auftrag veröffentlichen</button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: FAHRZEUG / VERLEIH ANBIETEN */}
+          {isVehicleModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Fahrzeug / Maschine anbieten</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  sendAction('fahrzeug', 'create', { 
+                    id: "VEH-" + Date.now(), 
+                    name: vehicleForm.name, 
+                    kategorie: vehicleForm.kategorie, 
+                    preis: vehicleForm.preis, 
+                    ersteller: userName,
+                    angebotstyp: vehicleForm.angebotstyp,
+                    ps: vehicleForm.ps,
+                    specs: vehicleForm.specs
+                  });
+                  setIsVehicleModalOpen(false);
+                  setVehicleForm({ name: '', kategorie: 'Trecker', preis: '', angebotstyp: 'verkauf', ps: '', specs: '' });
+                }} className="space-y-3 text-sm">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Art des Angebots</label>
+                    <select value={vehicleForm.angebotstyp} onChange={(e) => setVehicleForm({ ...vehicleForm, angebotstyp: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs">
+                      <option value="verkauf">Gebrauchtwagenmarkt (Verkauf)</option>
+                      <option value="verleih">Mietpark & Verleih</option>
+                    </select>
+                  </div>
+                  <input type="text" placeholder="Fahrzeugname (z.B. Fendt 728 Vario)" value={vehicleForm.name} onChange={(e) => setVehicleForm({ ...vehicleForm, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs" required />
+                  <select value={vehicleForm.kategorie} onChange={(e) => setVehicleForm({ ...vehicleForm, kategorie: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs">
+                    {VEHICLE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="number" placeholder={vehicleForm.angebotstyp === 'verleih' ? "Mietpreis (€ / Tag)" : "Festpreis (€)"} value={vehicleForm.preis} onChange={(e) => setVehicleForm({ ...vehicleForm, preis: e.target.value })} className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs" required />
+                    <input type="number" placeholder="Leistung (PS) opt." value={vehicleForm.ps} onChange={(e) => setVehicleForm({ ...vehicleForm, ps: e.target.value })} className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs" />
+                  </div>
+                  <input type="text" placeholder="Zusatz-Infos / Specs (z.B. 9m Arbeitsbreite, Seilwinde)" value={vehicleForm.specs} onChange={(e) => setVehicleForm({ ...vehicleForm, specs: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs" />
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setIsVehicleModalOpen(false)} className="w-1/2 bg-slate-800 p-2.5 rounded-xl text-xs">Abbrechen</button>
+                    <button type="submit" className="w-1/2 bg-emerald-600 text-white p-2.5 rounded-xl text-xs">Erstellen</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: WARE ANBIETEN */}
+          {isGoodModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Produkt / Ware anbieten</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  sendAction('ware', 'create', { id: "GOOD-" + Date.now(), produkt: goodForm.produkt, menge: goodForm.menge, einheit: goodForm.einheit, preis: goodForm.preis, ersteller: userName });
+                  setIsGoodModalOpen(false);
+                  setGoodForm({ produkt: '', menge: '', einheit: 'Liter (L)', preis: '' });
+                }} className="space-y-3 text-sm">
+                  <input type="text" placeholder="Produkt (z.B. Weizen, Zucker, Paletten)" value={goodForm.produkt} onChange={(e) => setGoodForm({ ...goodForm, produkt: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <input type="number" placeholder="Verfügbare Menge (z.B. 100000 oder 10)" value={goodForm.menge} onChange={(e) => setGoodForm({ ...goodForm, menge: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <select value={goodForm.einheit} onChange={(e) => setGoodForm({ ...goodForm, einheit: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+                    <option value="Liter (L)">Liter (L)</option>
+                    <option value="Palette">Palette</option>
+                    <option value="Ballen">Ballen</option>
+                    <option value="Stück">Stück</option>
+                  </select>
+                  <input type="number" placeholder="Preis in € (pro 1.000L / pro Stk.)" value={goodForm.preis} onChange={(e) => setGoodForm({ ...goodForm, preis: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5" required />
+                  <p className="text-[11px] text-slate-400 italic">Hinweis: Bei Liter gilt der Preis pro 1.000L (z.B. 360 €), bei Paletten/Stück pro einzelner Einheit.</p>
+                  <div className="flex gap-2 pt-2">
+                    <button type="button" onClick={() => setIsGoodModalOpen(false)} className="w-1/2 bg-slate-800 p-2.5 rounded-xl text-xs">Abbrechen</button>
+                    <button type="submit" className="w-1/2 bg-emerald-600 text-white p-2.5 rounded-xl text-xs">Veröffentlichen</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* PROFIL MODAL */}
+          {isEditingProfile && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+                <h3 className="font-bold text-lg">Hofname ändern</h3>
+                <input type="text" value={tempUserName} onChange={(e) => setTempUserName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm" />
+                <div className="flex gap-2">
+                  <button onClick={() => setIsEditingProfile(false)} className="w-1/2 bg-slate-800 p-2 rounded-xl text-xs">Abbrechen</button>
+                  <button onClick={handleSaveProfile} className="w-1/2 bg-emerald-600 p-2 rounded-xl text-xs text-white">Speichern</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
